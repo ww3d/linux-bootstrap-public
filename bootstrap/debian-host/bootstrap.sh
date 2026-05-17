@@ -341,6 +341,7 @@ provision_disk() {
     local disk=$1
     local mount_point=$2
     local part
+    local just_partitioned=0
 
     # SAFETY: never touch a disk that's mounted or used as swap, regardless
     # of what detection said. Last line of defense against bugs above.
@@ -361,28 +362,33 @@ provision_disk() {
         return 1
     fi
 
-    # 1. Partition (idempotent: only if no partition table yet)
-    if ! blkid -s PTTYPE -o value "$disk" 2>/dev/null | grep -q gpt; then
+    # 1. Partition (idempotent: only if target partition doesn't exist).
+    # Checking for $part rather than GPT label handles the case where a previous
+    # attempt left a GPT header but no partition entries.
+    if [[ ! -b "$part" ]]; then
         log "Partitioning $disk (GPT, single partition)"
         sfdisk --label gpt "$disk" >/dev/null <<EOF
 ,,L
 EOF
         partprobe "$disk" 2>/dev/null || true
-        sleep 1
+        udevadm settle 2>/dev/null || true
+        [[ -b "$part" ]] || { err "$part still not present after sfdisk + udevadm settle"; return 1; }
+        just_partitioned=1
         ok "$disk: partitioned"
     else
-        skip "$disk: already has GPT"
+        skip "$disk: $part already exists"
     fi
 
-    [[ -b "$part" ]] || { err "$part missing after partitioning"; return 1; }
-
-    # 2. Format (idempotent: only if no filesystem yet)
+    # 2. Format
+    # If we just partitioned, any FS signature blkid sees must be stale (it was
+    # there before sfdisk wrote the new partition table). Format unconditionally
+    # in that case so we don't silently inherit an old filesystem.
     local current_fs
     current_fs=$(blkid -s TYPE -o value "$part" 2>/dev/null || true)
-    if [[ -z "$current_fs" ]]; then
+    if [[ "$just_partitioned" -eq 1 || -z "$current_fs" ]]; then
         log "Formatting $part as $DATA_FS"
         if [[ "$DATA_FS" == "xfs" ]]; then
-            mkfs.xfs -L "data$(basename "$disk")" "$part" >/dev/null
+            mkfs.xfs -f -L "data$(basename "$disk")" "$part" >/dev/null
         else
             mkfs.ext4 -F -L "data$(basename "$disk")" "$part" >/dev/null
         fi
