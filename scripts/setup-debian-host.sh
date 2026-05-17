@@ -34,6 +34,9 @@ WITH_POWERSHELL=0
 BOOTSTRAP_REPO="https://github.com/ww3d/linux-bootstrap-public.git"
 BOOTSTRAP_DIR="/opt/linux-bootstrap"
 
+LOGFILE="/var/log/setup-debian-host.log"
+HISTORYFILE="/var/log/setup-debian-host.history"
+
 HOSTNAME_=""
 IP=""
 CIDR=""
@@ -55,6 +58,16 @@ usage() { sed -n '2,/^# ===/p' "$0" | sed 's/^# \?//; $d'; exit 0; }
 
 require_root() {
     [[ $EUID -eq 0 ]] || die "must run as root"
+}
+
+setup_logging() {
+    local args=$1
+    # History: one line per run with timestamp + arguments
+    printf '%s  pid=%d  args: %s\n' "$(date -Iseconds)" "$$" "$args" >> "$HISTORYFILE"
+    # Tee all subsequent stdout+stderr to the log file (append).
+    # Use `less -R $LOGFILE` to view with ANSI colors preserved.
+    exec > >(tee -a "$LOGFILE") 2>&1
+    log "Logging to $LOGFILE  (history: $HISTORYFILE)"
 }
 
 # ---------- Argument parsing ---------------------------------------------------
@@ -280,17 +293,33 @@ step_sysupdate() {
     fi
 }
 
+disk_in_use() {
+    # Returns 0 (true) if the disk or any of its partitions is mounted
+    # anywhere, or used as swap. Last-line-of-defense safety check.
+    local disk=$1
+    # Check mountpoints (disk + all children). Any non-whitespace line = in use.
+    if lsblk -nrlo MOUNTPOINT "$disk" 2>/dev/null | grep -qE '\S'; then
+        return 0
+    fi
+    # Check swap usage
+    if awk '{print $1}' /proc/swaps 2>/dev/null | grep -qxE "${disk}[0-9p]*"; then
+        return 0
+    fi
+    return 1
+}
+
 get_data_disks() {
     # Explicit --data-disk overrides auto-detection
     if [[ -n "$DATA_DISK" ]]; then
         printf '%s\n' "$DATA_DISK"
         return
     fi
-    # Find disks that the root filesystem lives on (walk down from root device)
+    # Find disks that the root filesystem lives on. NOTE: -l (list) is critical;
+    # without it, lsblk -s emits tree characters (└─) that corrupt awk parsing.
     local root_disks=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && root_disks+=("$line")
-    done < <(lsblk -nso NAME,TYPE "$(findmnt -no SOURCE /)" 2>/dev/null \
+    done < <(lsblk -nslo NAME,TYPE "$(findmnt -no SOURCE /)" 2>/dev/null \
              | awk '$2 == "disk" {print "/dev/" $1}' | sort -u)
     # All physical disks minus root disks
     local all_disks=()
@@ -312,6 +341,13 @@ provision_disk() {
     local disk=$1
     local mount_point=$2
     local part
+
+    # SAFETY: never touch a disk that's mounted or used as swap, regardless
+    # of what detection said. Last line of defense against bugs above.
+    if disk_in_use "$disk"; then
+        err "$disk: SAFETY ABORT — disk or one of its partitions is mounted/swap-active"
+        return 1
+    fi
 
     # NVMe uses pNN suffix (e.g. /dev/nvme0n1p1), everything else just N (e.g. /dev/sdb1)
     if [[ "$disk" =~ nvme ]]; then
@@ -422,8 +458,10 @@ step_data_disk() {
 
 # ---------- Main ---------------------------------------------------------------
 main() {
+    local original_args="$*"
     parse_args "$@"
     require_root
+    setup_logging "$original_args"
 
     log "Provisioning $HOSTNAME_ ($IP/$CIDR via $INTERFACE)"
     log "Domain: $DOMAIN | DNS: $DNS | Gateway: $GATEWAY"
