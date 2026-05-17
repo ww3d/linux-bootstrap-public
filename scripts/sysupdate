@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# sysupdate - daily system maintenance for Debian/Ubuntu
+# Designed to run unattended via systemd timer; logs to journald.
+
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    echo "sysupdate: must run as root (try: sudo $0)" >&2
+    exit 1
+fi
+
+# Make apt/dpkg/debconf/needrestart fully non-interactive
+export DEBIAN_FRONTEND=noninteractive
+export DEBIAN_PRIORITY=critical
+export NEEDRESTART_MODE=a           # auto-restart services without prompting
+                                    # use NEEDRESTART_SUSPEND=1 instead to skip entirely
+
+# Keep existing config files on conflict, accept new defaults silently
+APT_OPTS=(
+    -y
+    -o Dpkg::Options::=--force-confdef
+    -o Dpkg::Options::=--force-confold
+)
+
+# Prevent overlapping runs (timer + manual invocation). Exit 75 = EX_TEMPFAIL
+# from sysexits.h: systemd marks the unit as failed but the cause is explicit
+# in the journal ("another run in progress") rather than masked behind exit 0.
+exec 9>/var/lock/sysupdate.lock
+flock -n 9 || { echo "Another sysupdate run is in progress, exiting." >&2; exit 75; }
+
+echo ">>> apt-get update"
+apt-get update
+
+echo ">>> apt-get full-upgrade"
+apt-get "${APT_OPTS[@]}" full-upgrade
+
+echo ">>> apt-get autoremove"
+apt-get "${APT_OPTS[@]}" --purge autoremove
+
+echo ">>> apt-get autoclean"
+apt-get autoclean
+
+echo ">>> apt-get clean"
+apt-get clean
+
+# Report if a reboot is needed (kernel/libc/etc. updated)
+if [[ -f /run/reboot-required ]]; then
+    echo ">>> REBOOT REQUIRED"
+    [[ -f /run/reboot-required.pkgs ]] && cat /run/reboot-required.pkgs
+fi
+
+echo ">>> sysupdate completed successfully"

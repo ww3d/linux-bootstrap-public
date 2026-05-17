@@ -1,0 +1,458 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# setup-debian-host.sh — Debian 13 (Trixie) post-install provisioning
+#
+# Usage:
+#   wget -qO /tmp/provision.sh https://raw.githubusercontent.com/ww3d/linux-bootstrap-public/main/scripts/setup-debian-host.sh
+#   bash /tmp/provision.sh --hostname=ci01 --ip=10.31.42.10 --cidr=16 \
+#                          --gateway=10.31.0.1 --dns=10.31.0.1 \
+#                          --domain=internal.example.com \
+#                          --with-data-disk
+#
+# Required: --hostname --ip --cidr --gateway --dns --domain
+# Optional: --timezone (default Europe/Berlin)
+#           --interface (default: first non-loopback interface)
+#           --permit-root-login yes|prohibit-password|no  (default prohibit-password)
+#           --with-data-disk        (provision data disk(s) if present)
+#           --data-disk PATH        (default: auto-detect all non-system disks)
+#           --data-fs xfs|ext4      (default xfs)
+#           --data-mount PATH       (first disk default /data; further: /data2, /data3, ...)
+#           --with-powershell       (install pwsh)
+# ==============================================================================
+set -euo pipefail
+
+# ---------- Defaults -----------------------------------------------------------
+TIMEZONE="Europe/Berlin"
+INTERFACE=""
+PERMIT_ROOT_LOGIN="prohibit-password"
+WITH_DATA_DISK=0
+DATA_DISK=""
+DATA_FS="xfs"
+DATA_MOUNT="/data"
+WITH_POWERSHELL=0
+
+BOOTSTRAP_REPO="https://github.com/ww3d/linux-bootstrap-public.git"
+BOOTSTRAP_DIR="/opt/linux-bootstrap"
+
+HOSTNAME_=""
+IP=""
+CIDR=""
+GATEWAY=""
+DNS=""
+DOMAIN=""
+
+# ---------- Helpers ------------------------------------------------------------
+RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[0;33m'; BLU='\033[0;34m'; RST='\033[0m'
+
+log()  { printf '%b\n' "${BLU}[$(date +%H:%M:%S)]${RST} $*"; }
+ok()   { printf '%b\n' "${GRN}  ✓${RST} $*"; }
+skip() { printf '%b\n' "${YLW}  ~${RST} $* ${YLW}(already done)${RST}"; }
+err()  { printf '%b\n' "${RED}  ✗${RST} $*" >&2; }
+die()  { err "$*"; exit 1; }
+step() { printf '\n%b\n' "${BLU}== $* ==${RST}"; }
+
+usage() { sed -n '2,/^# ===/p' "$0" | sed 's/^# \?//; $d'; exit 0; }
+
+require_root() {
+    [[ $EUID -eq 0 ]] || die "must run as root"
+}
+
+# ---------- Argument parsing ---------------------------------------------------
+parse_args() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --hostname=*)    HOSTNAME_="${arg#*=}" ;;
+            --ip=*)          IP="${arg#*=}" ;;
+            --cidr=*)        CIDR="${arg#*=}" ;;
+            --gateway=*)     GATEWAY="${arg#*=}" ;;
+            --dns=*)         DNS="${arg#*=}" ;;
+            --domain=*)      DOMAIN="${arg#*=}" ;;
+            --timezone=*)    TIMEZONE="${arg#*=}" ;;
+            --interface=*)   INTERFACE="${arg#*=}" ;;
+            --permit-root-login=*) PERMIT_ROOT_LOGIN="${arg#*=}" ;;
+            --with-data-disk)    WITH_DATA_DISK=1 ;;
+            --data-disk=*)   DATA_DISK="${arg#*=}" ;;
+            --data-fs=*)     DATA_FS="${arg#*=}" ;;
+            --data-mount=*)  DATA_MOUNT="${arg#*=}" ;;
+            --with-powershell)   WITH_POWERSHELL=1 ;;
+            -h|--help)       usage ;;
+            *) die "unknown argument: $arg (try --help)" ;;
+        esac
+    done
+
+    local missing=()
+    [[ -z "$HOSTNAME_" ]] && missing+=("--hostname")
+    [[ -z "$IP"        ]] && missing+=("--ip")
+    [[ -z "$CIDR"      ]] && missing+=("--cidr")
+    [[ -z "$GATEWAY"   ]] && missing+=("--gateway")
+    [[ -z "$DNS"       ]] && missing+=("--dns")
+    [[ -z "$DOMAIN"    ]] && missing+=("--domain")
+    [[ ${#missing[@]} -gt 0 ]] && die "missing required: ${missing[*]}"
+
+    [[ "$DATA_FS" =~ ^(xfs|ext4)$ ]] || die "--data-fs must be xfs or ext4"
+    [[ "$PERMIT_ROOT_LOGIN" =~ ^(yes|prohibit-password|no)$ ]] \
+        || die "--permit-root-login must be yes, prohibit-password, or no"
+
+    if [[ -z "$INTERFACE" ]]; then
+        INTERFACE=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+        [[ -n "$INTERFACE" ]] || die "could not auto-detect network interface"
+    fi
+}
+
+# ---------- Steps --------------------------------------------------------------
+
+step_packages() {
+    step "Core packages"
+    local pkgs=(openssh-server vim-nox nano sudo wget ca-certificates systemd-timesyncd git unzip)
+    [[ "$WITH_DATA_DISK" -eq 1 && "$DATA_FS" == "xfs" ]] && pkgs+=(xfsprogs)
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkgs[@]}" >/dev/null
+    ok "installed: ${pkgs[*]}"
+}
+
+step_timezone() {
+    step "Timezone"
+    local current
+    current=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+    if [[ "$current" == "$TIMEZONE" ]]; then
+        skip "timezone $TIMEZONE"
+    else
+        timedatectl set-timezone "$TIMEZONE"
+        ok "set to $TIMEZONE"
+    fi
+}
+
+step_hostname() {
+    step "Hostname"
+    local current
+    current=$(hostnamectl hostname)
+    if [[ "$current" == "$HOSTNAME_" ]]; then
+        skip "hostname $HOSTNAME_"
+    else
+        hostnamectl set-hostname "$HOSTNAME_"
+        ok "set to $HOSTNAME_"
+    fi
+
+    local hosts_line="$IP $HOSTNAME_.$DOMAIN $HOSTNAME_"
+    if grep -qF "$hosts_line" /etc/hosts; then
+        skip "/etc/hosts entry"
+    else
+        # Remove any previous line for this hostname, then append
+        sed -i.bak "/[[:space:]]$HOSTNAME_\(\.\|[[:space:]]\|$\)/d" /etc/hosts
+        printf '%s\n' "$hosts_line" >> /etc/hosts
+        ok "/etc/hosts: $hosts_line"
+    fi
+}
+
+step_network() {
+    step "Network ($INTERFACE)"
+    local iface_file="/etc/network/interfaces.d/$INTERFACE"
+    local desired
+    desired=$(cat <<EOF
+auto $INTERFACE
+iface $INTERFACE inet static
+    address $IP/$CIDR
+    gateway $GATEWAY
+EOF
+)
+    if [[ -f "$iface_file" ]] && diff -q <(printf '%s\n' "$desired") "$iface_file" >/dev/null; then
+        skip "network config for $INTERFACE"
+    else
+        printf '%s\n' "$desired" > "$iface_file"
+        ok "wrote $iface_file (active after next reboot or 'systemctl restart networking')"
+    fi
+}
+
+step_dns() {
+    step "DNS"
+    local desired
+    desired=$(cat <<EOF
+nameserver $DNS
+search $DOMAIN
+EOF
+)
+    # Don't fight systemd-resolved if it's the owner
+    if [[ -L /etc/resolv.conf ]]; then
+        skip "/etc/resolv.conf is managed (symlink) — adjust via /etc/systemd/resolved.conf instead"
+    elif diff -q <(printf '%s\n' "$desired") /etc/resolv.conf >/dev/null 2>&1; then
+        skip "DNS config"
+    else
+        printf '%s\n' "$desired" > /etc/resolv.conf
+        ok "wrote /etc/resolv.conf"
+    fi
+}
+
+step_ssh() {
+    step "SSH (PermitRootLogin $PERMIT_ROOT_LOGIN)"
+    local cfg=/etc/ssh/sshd_config
+    if grep -qE "^[[:space:]]*PermitRootLogin[[:space:]]+$PERMIT_ROOT_LOGIN([[:space:]]|$)" "$cfg"; then
+        skip "PermitRootLogin already $PERMIT_ROOT_LOGIN"
+    else
+        sed -i.bak -E "s|^[[:space:]]*#?[[:space:]]*PermitRootLogin.*|PermitRootLogin $PERMIT_ROOT_LOGIN|" "$cfg"
+        grep -qE '^PermitRootLogin' "$cfg" || printf '\nPermitRootLogin %s\n' "$PERMIT_ROOT_LOGIN" >> "$cfg"
+        systemctl reload ssh
+        ok "PermitRootLogin $PERMIT_ROOT_LOGIN"
+    fi
+}
+
+step_apt_sources() {
+    step "APT sources (contrib non-free non-free-firmware)"
+    local changed=0
+    if [[ -f /etc/apt/sources.list ]] && grep -qE '^deb.*main non-free-firmware[[:space:]]*$' /etc/apt/sources.list; then
+        sed -i.bak 's/main non-free-firmware/main contrib non-free non-free-firmware/g' /etc/apt/sources.list
+        changed=1
+    fi
+    if [[ -f /etc/apt/sources.list.d/debian.sources ]] && grep -qE '^Components: main non-free-firmware[[:space:]]*$' /etc/apt/sources.list.d/debian.sources; then
+        sed -i.bak '/^Components:/ s/main non-free-firmware/main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources
+        changed=1
+    fi
+    if [[ "$changed" -eq 1 ]]; then
+        apt-get update >/dev/null
+        ok "components added, apt cache refreshed"
+    else
+        skip "components already include contrib + non-free"
+    fi
+}
+
+step_clone_bootstrap() {
+    step "linux-bootstrap repo"
+    if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
+        skip "$BOOTSTRAP_DIR already cloned"
+        return
+    fi
+    git clone --depth=1 "$BOOTSTRAP_REPO" "$BOOTSTRAP_DIR"
+    ok "cloned $BOOTSTRAP_REPO → $BOOTSTRAP_DIR"
+}
+
+step_default_profile() {
+    step "Default profile"
+    local src="$BOOTSTRAP_DIR/templates/default-profile"
+    local marker=/root/.profile-installed
+
+    if [[ ! -d "$src" ]]; then
+        err "$src not found — wrong repo path or repo layout changed"
+        return 1
+    fi
+    if [[ -f "$marker" ]]; then
+        skip "profile already deployed (delete $marker to redeploy)"
+        return
+    fi
+    # Copy dotfiles and subdirs (note the /. to also copy hidden files)
+    cp -r "$src"/. /root/
+    # Don't ship the README to the host
+    rm -f /root/README.md
+    date -Iseconds > "$marker"
+    ok "deployed from $src"
+}
+
+step_powershell() {
+    [[ "$WITH_POWERSHELL" -eq 0 ]] && return
+    step "PowerShell"
+    if command -v pwsh >/dev/null 2>&1; then
+        skip "pwsh already installed"
+        return
+    fi
+    local tmp
+    tmp=$(mktemp -d)
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    wget -q "https://packages.microsoft.com/config/debian/${VERSION_ID}/packages-microsoft-prod.deb" -O "$tmp/ms.deb"
+    dpkg -i "$tmp/ms.deb" >/dev/null
+    rm -rf "$tmp"
+    apt-get update >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y powershell >/dev/null
+    ok "pwsh installed ($(pwsh -Version))"
+}
+
+step_sysupdate() {
+    step "sysupdate (linux-bootstrap timer)"
+    if [[ -x /usr/local/bin/sysupdate ]]; then
+        skip "sysupdate already installed"
+        return
+    fi
+    local installer="$BOOTSTRAP_DIR/bootstrap/sysupdate-timer/bootstrap.sh"
+    if [[ -x "$installer" ]]; then
+        "$installer"
+        ok "sysupdate + timer installed"
+    else
+        err "$installer not found"
+        return 1
+    fi
+}
+
+get_data_disks() {
+    # Explicit --data-disk overrides auto-detection
+    if [[ -n "$DATA_DISK" ]]; then
+        printf '%s\n' "$DATA_DISK"
+        return
+    fi
+    # Find disks that the root filesystem lives on (walk down from root device)
+    local root_disks=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && root_disks+=("$line")
+    done < <(lsblk -nso NAME,TYPE "$(findmnt -no SOURCE /)" 2>/dev/null \
+             | awk '$2 == "disk" {print "/dev/" $1}' | sort -u)
+    # All physical disks minus root disks
+    local all_disks=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && all_disks+=("$line")
+    done < <(lsblk -nd -o NAME,TYPE | awk '$2 == "disk" {print "/dev/" $1}')
+
+    local d r is_root
+    for d in "${all_disks[@]}"; do
+        is_root=0
+        for r in "${root_disks[@]}"; do
+            [[ "$d" == "$r" ]] && is_root=1 && break
+        done
+        [[ "$is_root" -eq 0 ]] && printf '%s\n' "$d"
+    done
+}
+
+provision_disk() {
+    local disk=$1
+    local mount_point=$2
+    local part
+
+    # NVMe uses pNN suffix (e.g. /dev/nvme0n1p1), everything else just N (e.g. /dev/sdb1)
+    if [[ "$disk" =~ nvme ]]; then
+        part="${disk}p1"
+    else
+        part="${disk}1"
+    fi
+
+    if [[ ! -b "$disk" ]]; then
+        err "$disk not present"
+        return 1
+    fi
+
+    # 1. Partition (idempotent: only if no partition table yet)
+    if ! blkid -s PTTYPE -o value "$disk" 2>/dev/null | grep -q gpt; then
+        log "Partitioning $disk (GPT, single partition)"
+        sfdisk --label gpt "$disk" >/dev/null <<EOF
+,,L
+EOF
+        partprobe "$disk" 2>/dev/null || true
+        sleep 1
+        ok "$disk: partitioned"
+    else
+        skip "$disk: already has GPT"
+    fi
+
+    [[ -b "$part" ]] || { err "$part missing after partitioning"; return 1; }
+
+    # 2. Format (idempotent: only if no filesystem yet)
+    local current_fs
+    current_fs=$(blkid -s TYPE -o value "$part" 2>/dev/null || true)
+    if [[ -z "$current_fs" ]]; then
+        log "Formatting $part as $DATA_FS"
+        if [[ "$DATA_FS" == "xfs" ]]; then
+            mkfs.xfs -L "data$(basename "$disk")" "$part" >/dev/null
+        else
+            mkfs.ext4 -F -L "data$(basename "$disk")" "$part" >/dev/null
+        fi
+        ok "$part: formatted as $DATA_FS"
+    elif [[ "$current_fs" == "$DATA_FS" ]]; then
+        skip "$part: already $DATA_FS"
+    else
+        err "$part: has $current_fs, refusing to reformat (manual review needed)"
+        return 1
+    fi
+
+    # 3. Mount point + fstab
+    mkdir -p "$mount_point"
+    local uuid
+    uuid=$(blkid -s UUID -o value "$part")
+    local fstab_line="UUID=$uuid  $mount_point  $DATA_FS  defaults,noatime  0 2"
+
+    if grep -qF "UUID=$uuid" /etc/fstab; then
+        skip "fstab entry for $part"
+    else
+        sed -i.bak "\|[[:space:]]${mount_point}[[:space:]]|d" /etc/fstab
+        printf '%s\n' "$fstab_line" >> /etc/fstab
+        ok "fstab entry: $part → $mount_point"
+    fi
+
+    systemctl daemon-reload
+    if mountpoint -q "$mount_point"; then
+        skip "$mount_point already mounted"
+    else
+        mount "$mount_point"
+        ok "$mount_point mounted"
+    fi
+}
+
+step_data_disk() {
+    [[ "$WITH_DATA_DISK" -eq 0 ]] && return
+    step "Data disk(s)"
+
+    # Show all physical disks for awareness
+    log "Available physical disks:"
+    lsblk -d -n -o NAME,SIZE,MODEL,TYPE | awk '$NF == "disk" {sub(/disk$/,""); print "    /dev/" $0}'
+
+    local disks=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && disks+=("$line")
+    done < <(get_data_disks)
+
+    if [[ ${#disks[@]} -eq 0 ]]; then
+        skip "no data disks found (system disk excluded automatically)"
+        return
+    fi
+
+    log "Will provision: ${disks[*]}"
+
+    local i=1 d mount_point
+    for d in "${disks[@]}"; do
+        if [[ $i -eq 1 ]]; then
+            mount_point="$DATA_MOUNT"
+        else
+            mount_point="${DATA_MOUNT}${i}"
+        fi
+        printf '\n'
+        log "--- Disk $i/${#disks[@]}: $d → $mount_point ---"
+        if ! provision_disk "$d" "$mount_point"; then
+            err "skipped $d (continuing with remaining disks)"
+        fi
+        i=$((i + 1))
+    done
+
+    # SSD TRIM timer (no-op on rotational disks)
+    systemctl enable --now fstrim.timer >/dev/null 2>&1 || true
+}
+
+# ---------- Main ---------------------------------------------------------------
+main() {
+    parse_args "$@"
+    require_root
+
+    log "Provisioning $HOSTNAME_ ($IP/$CIDR via $INTERFACE)"
+    log "Domain: $DOMAIN | DNS: $DNS | Gateway: $GATEWAY"
+    log "SSH root login: $PERMIT_ROOT_LOGIN"
+    if [[ $WITH_DATA_DISK -eq 1 ]]; then
+        log "Data disk: $DATA_FS @ $DATA_MOUNT ($([[ -n "$DATA_DISK" ]] && echo "$DATA_DISK" || echo 'auto-detect all non-system disks'))"
+    else
+        log "Data disk: no"
+    fi
+    log "PowerShell: $([[ $WITH_POWERSHELL -eq 1 ]] && echo yes || echo no)"
+
+    apt-get update >/dev/null
+
+    step_packages
+    step_timezone
+    step_hostname
+    step_network
+    step_dns
+    step_ssh
+    step_apt_sources
+    step_clone_bootstrap
+    step_default_profile
+    step_powershell
+    step_sysupdate
+    step_data_disk
+
+    printf '\n%b\n' "${GRN}=== provisioning complete ===${RST}"
+    log "Reboot recommended to apply hostname and network changes:"
+    log "  systemctl reboot"
+}
+
+main "$@"
