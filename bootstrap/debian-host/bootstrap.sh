@@ -148,12 +148,24 @@ step_hostname() {
 
     local hosts_line="$IP $HOSTNAME_.$DOMAIN $HOSTNAME_"
     if grep -qF "$hosts_line" /etc/hosts; then
-        skip "/etc/hosts entry"
+        skip "/etc/hosts: $hosts_line"
     else
         # Remove any previous line for this hostname, then append
         sed -i.bak "/[[:space:]]$HOSTNAME_\(\.\|[[:space:]]\|$\)/d" /etc/hosts
         printf '%s\n' "$hosts_line" >> /etc/hosts
         ok "/etc/hosts: $hosts_line"
+    fi
+
+    # Remove the Debian installer's `127.0.1.1 <hostname>` placeholder line.
+    # On a host with a real static IP this loopback shadow is more hindrance
+    # than help: `getent hosts $(hostname)` would return 127.0.1.1 instead of
+    # the real address. The authoritative `$IP $HOSTNAME_` entry above is
+    # enough to satisfy gethostbyname() callers like sendmail or Java apps.
+    if grep -qE '^127\.0\.1\.1[[:space:]]' /etc/hosts; then
+        sed -i.bak -E '/^127\.0\.1\.1[[:space:]]/d' /etc/hosts
+        ok "removed 127.0.1.1 placeholder from /etc/hosts"
+    else
+        skip "no 127.0.1.1 placeholder in /etc/hosts"
     fi
 }
 
@@ -169,10 +181,22 @@ iface $INTERFACE inet static
 EOF
 )
     if [[ -f "$iface_file" ]] && diff -q <(printf '%s\n' "$desired") "$iface_file" >/dev/null; then
-        skip "network config for $INTERFACE"
+        skip "drop-in $iface_file"
     else
         printf '%s\n' "$desired" > "$iface_file"
         ok "wrote $iface_file (active after next reboot or 'systemctl restart networking')"
+    fi
+
+    # Disable any leftover top-level $INTERFACE config in /etc/network/interfaces.
+    # Debian's installer typically writes `allow-hotplug eth0` + `iface eth0 inet dhcp`
+    # which would fight our drop-in at boot (ifupdown's behavior on duplicate
+    # iface definitions is undefined).
+    local main_cfg=/etc/network/interfaces
+    if [[ -f "$main_cfg" ]] && grep -qE "^[[:space:]]*(auto|allow-hotplug|iface)[[:space:]]+$INTERFACE([[:space:]]|$)" "$main_cfg"; then
+        sed -i.bak -E "/^[[:space:]]*(auto|allow-hotplug|iface)[[:space:]]+$INTERFACE([[:space:]]|$)/ s|^|# |" "$main_cfg"
+        ok "commented out leftover $INTERFACE entries in $main_cfg"
+    else
+        skip "no active $INTERFACE entries in $main_cfg"
     fi
 }
 
