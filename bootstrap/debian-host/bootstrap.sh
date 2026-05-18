@@ -18,6 +18,7 @@
 #           --data-fs xfs|ext4      (default xfs)
 #           --data-mount PATH       (first disk default /data; further: /data2, /data3, ...)
 #           --with-powershell       (install pwsh)
+#           --skip-initial-sysupdate (don't run sysupdate after install; default: run)
 # ==============================================================================
 set -euo pipefail
 
@@ -30,6 +31,7 @@ DATA_DISK=""
 DATA_FS="xfs"
 DATA_MOUNT="/data"
 WITH_POWERSHELL=0
+SKIP_INITIAL_SYSUPDATE=0
 
 BOOTSTRAP_REPO="https://github.com/ww3d/linux-bootstrap-public.git"
 BOOTSTRAP_DIR="/opt/linux-bootstrap"
@@ -84,11 +86,12 @@ parse_args() {
             --timezone=*)    TIMEZONE="${arg#*=}" ;;
             --interface=*)   INTERFACE="${arg#*=}" ;;
             --permit-root-login=*) PERMIT_ROOT_LOGIN="${arg#*=}" ;;
-            --with-data-disk)    WITH_DATA_DISK=1 ;;
+            --with-data-disk)        WITH_DATA_DISK=1 ;;
             --data-disk=*)   DATA_DISK="${arg#*=}" ;;
             --data-fs=*)     DATA_FS="${arg#*=}" ;;
             --data-mount=*)  DATA_MOUNT="${arg#*=}" ;;
-            --with-powershell)   WITH_POWERSHELL=1 ;;
+            --with-powershell)       WITH_POWERSHELL=1 ;;
+            --skip-initial-sysupdate) SKIP_INITIAL_SYSUPDATE=1 ;;
             -h|--help)       usage ;;
             *) die "unknown argument: $arg (try --help)" ;;
         esac
@@ -197,6 +200,21 @@ step_hostname() {
         ok "removed 127.0.1.1 placeholder from /etc/hosts"
     else
         skip "no 127.0.1.1 placeholder in /etc/hosts"
+    fi
+
+    # Ensure the 127.0.0.1 loopback line includes localhost.localdomain.
+    # Debian's default is just `127.0.0.1 localhost`, but the FQDN form is
+    # what some apps (mail daemons, Java JNDI) expect when resolving the
+    # localhost name. Three cases: already correct → skip; line exists but
+    # without localhost.localdomain → prepend the alias; line missing → add.
+    if grep -qE '^127\.0\.0\.1[[:space:]]+.*localhost\.localdomain' /etc/hosts; then
+        skip "/etc/hosts: 127.0.0.1 already maps to localhost.localdomain"
+    elif grep -qE '^127\.0\.0\.1[[:space:]]' /etc/hosts; then
+        sed -i.bak -E 's|^(127\.0\.0\.1[[:space:]]+)|\1localhost.localdomain |' /etc/hosts
+        ok "/etc/hosts: added localhost.localdomain alias to 127.0.0.1"
+    else
+        printf '127.0.0.1 localhost.localdomain localhost\n' >> /etc/hosts
+        ok "/etc/hosts: added 127.0.0.1 localhost.localdomain localhost"
     fi
 }
 
@@ -368,6 +386,33 @@ step_sysupdate() {
         ok "sysupdate + timer installed"
     else
         err "$installer not found"
+        return 1
+    fi
+}
+
+step_initial_sysupdate() {
+    [[ "$SKIP_INITIAL_SYSUPDATE" -eq 1 ]] && return
+    step "Initial sysupdate run"
+
+    if [[ ! -x /usr/local/bin/sysupdate ]]; then
+        err "sysupdate not installed — step_sysupdate must have run first"
+        return 1
+    fi
+
+    # One-shot marker: subsequent provisioning re-runs won't trigger another
+    # full sysupdate cycle; the systemd timer takes over from here.
+    local marker=/var/log/setup-debian-host.initial-sysupdate
+    if [[ -f "$marker" ]]; then
+        skip "initial sysupdate already ran on $(cat "$marker")"
+        return
+    fi
+
+    log "Running sysupdate (this may take a few minutes on a fresh install)..."
+    if /usr/local/bin/sysupdate; then
+        date -Iseconds > "$marker"
+        ok "initial sysupdate complete"
+    else
+        err "sysupdate exited non-zero — re-run manually: sysupdate"
         return 1
     fi
 }
@@ -557,6 +602,7 @@ main() {
         log "Data disk: no"
     fi
     log "PowerShell: $([[ $WITH_POWERSHELL -eq 1 ]] && echo yes || echo no)"
+    log "Initial sysupdate: $([[ $SKIP_INITIAL_SYSUPDATE -eq 0 ]] && echo yes || echo no)"
 
     apt-get update >/dev/null
 
@@ -573,6 +619,7 @@ main() {
     step_default_profile
     step_powershell
     step_sysupdate
+    step_initial_sysupdate
     step_data_disk
 
     printf '\n%b\n' "${GRN}=== provisioning complete ===${RST}"
