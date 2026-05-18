@@ -135,6 +135,37 @@ step_timezone() {
     fi
 }
 
+step_timesync() {
+    step "Time sync"
+
+    # Ensure systemd-timesyncd is the active time daemon. The package itself
+    # is installed in step_packages; here we enable + start the service and
+    # remove any leftover ntpsec stack from the Debian installer (which would
+    # otherwise fight timesyncd over which daemon manages the clock).
+    if systemctl is-active --quiet systemd-timesyncd.service; then
+        skip "systemd-timesyncd already active"
+    else
+        systemctl enable --now systemd-timesyncd.service >/dev/null 2>&1
+        ok "enabled and started systemd-timesyncd"
+    fi
+
+    local ntpsec_pkgs=(ntpsec ntpsec-ntpdate ntpsec-ntpdig python3-ntp)
+    local installed=()
+    local pkg
+    for pkg in "${ntpsec_pkgs[@]}"; do
+        if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q '^install ok installed'; then
+            installed+=("$pkg")
+        fi
+    done
+
+    if [[ ${#installed[@]} -gt 0 ]]; then
+        DEBIAN_FRONTEND=noninteractive apt-get purge -y "${installed[@]}" >/dev/null
+        ok "purged ntpsec stack: ${installed[*]}"
+    else
+        skip "no ntpsec packages installed"
+    fi
+}
+
 step_hostname() {
     step "Hostname"
     local current
@@ -197,6 +228,30 @@ EOF
         ok "commented out leftover $INTERFACE entries in $main_cfg"
     else
         skip "no active $INTERFACE entries in $main_cfg"
+    fi
+}
+
+step_dhcp_client() {
+    step "DHCP client cleanup"
+
+    # Static IP configurations don't need a DHCP daemon. The Debian installer
+    # leaves dhcpcd active by default, which then overwrites /etc/resolv.conf
+    # at lease renew time with its own template-driven version. Purge it so
+    # step_dns is the final authority on /etc/resolv.conf.
+    local dhcp_pkgs=(dhcpcd-base dhcpcd5)
+    local installed=()
+    local pkg
+    for pkg in "${dhcp_pkgs[@]}"; do
+        if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q '^install ok installed'; then
+            installed+=("$pkg")
+        fi
+    done
+
+    if [[ ${#installed[@]} -gt 0 ]]; then
+        DEBIAN_FRONTEND=noninteractive apt-get purge -y "${installed[@]}" >/dev/null
+        ok "purged DHCP client: ${installed[*]}"
+    else
+        skip "no DHCP client packages installed"
     fi
 }
 
@@ -507,8 +562,10 @@ main() {
 
     step_packages
     step_timezone
+    step_timesync
     step_hostname
     step_network
+    step_dhcp_client
     step_dns
     step_ssh
     step_apt_sources
