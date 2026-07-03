@@ -1,6 +1,9 @@
 ---
 name: ccweb-prompt
-description: Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer <repo>", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.
+description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
+metadata:
+  version: "1.8.1"
+  source: ww3d/playbook
 ---
 
 # Agent-Prompt (TASK) bauen
@@ -83,7 +86,7 @@ Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
 
 ## Decision-Log
 
-Format `YYYY-MM-DDTHHMM-<projekt>-<phase>-decisions.md` via `create_file` + `present_files`,
+Format `YYYY-MM-DDTHHMM-[projekt]-[phase]-decisions.md` via `create_file` + `present_files`,
 immutable Point-in-Time, nie editieren. **Ablage-Ort ist repo-spezifisch** — am Repo lesen, nicht
 annehmen: manche Repos fuehren einen `docs/decisions/`-Ordner (mehrere Logs), manche eine einzelne
 Datei, manche gar keins. Fuehrt das Repo keins, keins erzwingen.
