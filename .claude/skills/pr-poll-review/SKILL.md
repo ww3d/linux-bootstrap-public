@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und legt sie dem User vor jeder Veroeffentlichung zur Freigabe vor (Abhaken + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors — bevorzugt ueber `subscribe_pr_activity`-Events, als Fallback per Polling —, reviewt nach jeder Aenderung neu, resolved behandelte Threads und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind". Nicht fuer einen einmaligen Review ohne Approve. Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "1.8.1"
+  version: "1.9.0"
   source: ww3d/playbook
 ---
 
@@ -179,8 +179,8 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
 
 - Conventional Commits beim Bewerten der Commit-Messages erwarten.
 - Default-Branch aus dem PR-Objekt lesen.
-- GitHub MCP und `gh` sind gleichwertig (`AGENTS.md` § "Forge Tooling"); nicht mit einem
-  umstaendlichen MCP-Tool kaempfen wenn `gh api` sauberer ist.
+- `git` + `gh` sind Default fuer alle GitHub-Operationen (`AGENTS.md` § "Forge Tooling"); das
+  GitHub MCP nur als Fallback, wenn `gh` etwas nicht sauber kann, oder fuer MCP-only-Tools.
 - Falls via MCP gereviewt wird: Inline-Comments in drei Schritten — `create` (pending) →
   `add_comment_to_pending_review` → `submit_pending` (`event: COMMENT`/`REQUEST_CHANGES`); sonst
   scheitert der Inline-Review still. Bei `gh` entfaellt das.

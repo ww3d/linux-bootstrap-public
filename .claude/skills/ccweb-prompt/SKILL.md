@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "1.8.1"
+  version: "1.9.0"
   source: ww3d/playbook
 ---
 
@@ -100,6 +100,7 @@ Datei, manche gar keins. Fuehrt das Repo keins, keins erzwingen.
 
 ## Repo-Konventionen
 
-- GitHub MCP und `gh` sind gleichwertig (`AGENTS.md` § "Forge Tooling") — das saubere Werkzeug nehmen.
+- `git` + `gh` sind Default fuer alle GitHub-Operationen (`AGENTS.md` § "Forge Tooling"); das
+  GitHub MCP nur als Fallback oder fuer MCP-only-Tools.
 - Rollen getrennt: der Agent oeffnet Draft-PRs (`dev`), der `maintainer` merged
   (`AGENTS.md` § "PR Lifecycle").
