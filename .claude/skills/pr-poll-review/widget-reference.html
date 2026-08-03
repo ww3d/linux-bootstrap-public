@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pr-poll-review — Stufe-B Freigabe-Widget (Referenz)</title>
+<!--
+  Kanonische, lauffaehige Referenz fuer das Stufe-B-Freigabe-Widget (SKILL.md, Schritt 4).
+
+  ZWEI ZONEN:
+  - GERUEST (nicht uebernehmen): das Dokumentgeruest (DOCTYPE/html/head/body), der :root-Themeblock,
+    body/.wrap, das Container-Styling von .widget (Hintergrund/Radius/Schatten) und der .out-Kasten
+    inklusive des Standalone-Copy-Pfads (Clipboard-Kopie beim Freigeben, Copy-Button am .payload,
+    „Kopiert"-Feedback). Existiert nur, damit die Datei allein im Browser laeuft. Der Visualizer
+    nimmt NUR das Fragment aus der VORLAGE-Zone; das Geruest faellt weg. Der Copy-Pfad ist an das
+    .out-Element und an das Fehlen von sendPrompt gebunden — im Host (sendPrompt vorhanden, .out
+    entfaellt) erscheint kein Copy-Button und der Freigabe-Pfad bleibt unveraendert.
+  - VORLAGE (1:1 in den Host uebernehmen): das .widget-Fragment und die als VORLAGE markierten
+    CSS-Regeln.
+
+  HOST-REGELN in der VORLAGE (der Host stellt Hintergrund, Theme-Variablen und den Button-Grundstil):
+  - Farben/Fonts ausschliesslich ueber die ECHTEN Host-Token-Namen — nie Hex. Verwendet werden:
+    --text-primary/--text-secondary/--text-muted, --font-mono/--font-sans, --surface-1/--surface-2
+    (Achtung: --surface-0 ist im Host die dunkelste Canvas, Weiss/erhaben ist --surface-2),
+    --border, --bg-accent/--text-accent, --bg-danger/--text-danger, --bg-warning/--text-warning.
+    Im Host kommen sie vom Host; das GERUEST-:root definiert genau diese Namen als Standalone-
+    Fallback (mit korrekter Semantik: --surface-0 = Canvas, --surface-2 = erhaben).
+  - Schriftgewichte nur 400/500, kein 600/700 (kein <b>).
+  - Sentence case, kein text-transform: uppercase.
+  - Kein opacity auf Text — gedaempft wird ueber --text-muted.
+  - Aeussere Container bleiben transparent; Hintergrund/Radius/Schatten stellt der Host.
+  - Buttons sind vorgestylt: den Submit nicht accent-fuellen. Severity-Badges und Legenden-Buttons
+    dagegen Farbe UND Groesse INLINE setzen, sonst neutralisiert und aufblaeht die button-Basisregel
+    des Hosts sie.
+
+  MODELL:
+  - Findings kommen aus dem Stufe-A-Report (INJECTION-POINT: FINDINGS). Ihre Severity ist READ-ONLY
+    (statischer Badge) — man postet oder streicht sie nur. Findings tragen kein a/b/c (das gibt es nur
+    bei den offenen Fragen).
+  - Zwei Achsen: Severity (Blocker/Major/Minor) und Herkunft (Review vs. Custom). Der Prio-Select
+    der Custom-Punkte bietet nur die drei Severities (Default Blocker). „Custom" ist reine Herkunft:
+    das Custom-Legenden-Toggle trifft alle eigenen Punkte, unabhaengig von ihrer Severity.
+  - Eigene Punkte sind mehrzeilig (Markdown bleibt im Payload verbatim), fortlaufend nach den
+    Findings nummeriert, editier- und loeschbar.
+  - OFFENE FRAGEN kommen aus einem zweiten, getrennten Injection-Point (QUESTIONS), Namensraum
+    F1/F2/…. Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Eigener Bereich mit
+    ANDERER Interaktion: nicht posten/streichen, sondern EINE Wahl pro Frage — a=SOTA / b=Grosse /
+    c=Empfehlung / eigene Antwort. c ist vorbelegt (Default-Prinzip wie „alle posten"); der
+    a/b/c-Text ist read-only, waehlbar ist nur, welche Option gilt. Optionales explain = Klartext-
+    Zeile unter dem Titel. Leeres QUESTIONS entfernt den ganzen Bereich. Eine leere Custom-Antwort
+    faellt auf c zurueck.
+
+  Tastatur: Enter/Shift+Enter = neue Zeile · Strg/Cmd+Enter = freigeben (nimmt offenen
+  Composer-Text mit seiner Prio automatisch als Punkt mit) · Strg/Cmd+Shift+Enter = hinzufuegen.
+  Absenden ueber sendPrompt(); ohne Host faellt es auf die .out-Anzeige zurueck und kopiert den
+  Payload zusaetzlich in die Zwischenablage (GERUEST).
+-->
+<style>
+  /* ==== GERUEST — NICHT uebernehmen (nur Standalone) ============================================
+     Definiert dieselben Variablennamen, auf die die VORLAGE zugreift, als Fallback; im Host kommen
+     sie vom Host. Ebenso body/.wrap, der Container-Look von .widget und der .out-Kasten. ======= */
+  :root {
+    --surface-0: #e9ebf0; --surface-1: #f1f2f6; --surface-2: #ffffff;
+    --border: #d7dae1;
+    --text-primary: #1b1e24; --text-secondary: #565b66; --text-muted: #6b7280;
+    --bg-accent: #e4ecff;  --text-accent: #2f5bd0;
+    --bg-danger: #fce4e3;  --text-danger: #b3261e;
+    --bg-warning: #f8e6c4; --text-warning: #8a5a00;
+    --g-shadow: 0 1px 2px rgba(20,22,28,.06), 0 8px 30px rgba(20,22,28,.10);
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-0: #101216; --surface-1: #191c22; --surface-2: #1e2128; --border: #343a46;
+      --text-primary: #e6e8ec; --text-secondary: #a2a8b4; --text-muted: #8b919d;
+      --bg-accent: #1f2a45;  --text-accent: #9fb9ff;
+      --bg-danger: #3b1e1d;  --text-danger: #f2a7a1;
+      --bg-warning: #3a2d12; --text-warning: #e6b667;
+      --g-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 34px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="light"] {
+    --surface-0: #e9ebf0; --surface-1: #f1f2f6; --surface-2: #ffffff; --border: #d7dae1;
+    --text-primary: #1b1e24; --text-secondary: #565b66; --text-muted: #6b7280;
+    --bg-accent: #e4ecff; --text-accent: #2f5bd0;
+    --bg-danger: #fce4e3; --text-danger: #b3261e;
+    --bg-warning: #f8e6c4; --text-warning: #8a5a00;
+    --g-shadow: 0 1px 2px rgba(20,22,28,.06), 0 8px 30px rgba(20,22,28,.10);
+  }
+  :root[data-theme="dark"] {
+    --surface-0: #101216; --surface-1: #191c22; --surface-2: #1e2128; --border: #343a46;
+    --text-primary: #e6e8ec; --text-secondary: #a2a8b4; --text-muted: #8b919d;
+    --bg-accent: #1f2a45; --text-accent: #9fb9ff;
+    --bg-danger: #3b1e1d; --text-danger: #f2a7a1;
+    --bg-warning: #3a2d12; --text-warning: #e6b667;
+    --g-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 34px rgba(0,0,0,.45);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-primary); font-family: var(--font-sans);
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+    padding: clamp(16px, 4vw, 48px) 16px; display: flex; justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 560px; }
+  /* Standalone-Container-Look; im Host transparent (Host stellt die Flaeche). */
+  .widget { background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--g-shadow); overflow: hidden; }
+  .out { margin-top: 16px; }
+  .out .lbl { font: 500 11px/1 var(--font-mono); color: var(--text-muted); margin-bottom: 8px; }
+  .payload {
+    position: relative;
+    font: 500 13px/1.55 var(--font-mono); background: var(--surface-2); border: 1px dashed var(--border);
+    border-radius: 10px; padding: 14px 16px; color: var(--text-primary);
+    white-space: pre-wrap; word-break: break-word; min-height: 20px;
+  }
+  .payload .muted { color: var(--text-muted); }
+  .payload.flash { animation: flash .5s ease; }
+  @keyframes flash { from { border-color: var(--text-accent); background: color-mix(in srgb, var(--text-accent) 8%, var(--surface-2)); } to {} }
+  /* Manueller Copy-Rueckfall: oben rechts am .payload-Kasten (nicht am Widget-Kopf — dort haelt
+     .hspace die Ecke frei). Dezent, Host-Token-Farben, Gewicht 500. */
+  .copybtn {
+    position: absolute; top: 8px; right: 8px; appearance: none; cursor: pointer;
+    font: 500 11px/1 var(--font-mono); color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 8px; transition: background .12s, color .12s;
+  }
+  .copybtn:hover { background: var(--surface-2); color: var(--text-primary); }
+  .copybtn:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+  /* ==== VORLAGE — ab hier 1:1 in den Host uebernehmen =========================================
+     Farben/Fonts nur ueber Host-Token-Namen, Gewichte 400/500, Sentence case, kein opacity auf
+     Text. Weiss/erhaben ist --surface-2 (nicht --surface-0). ==================================== */
+  .whead {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .counter { display: flex; flex-direction: column; line-height: 1.15; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .counter .cnum { font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  .counter .clabel { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .hspace { }  /* rechte Grid-Spalte bewusst leer: haelt die Mitte zentriert und die obere rechte
+                  Ecke frei, wo Chat-Clients ihr eigenes Menue einblenden. */
+
+  .seg { display: inline-flex; background: var(--surface-1); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg button {
+    appearance: none; border: 0; cursor: pointer; font: 500 12px/1 var(--font-sans);
+    color: var(--text-secondary); background: transparent; padding: 6px 12px; border-radius: 6px;
+    transition: background .12s, color .12s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); }
+  .seg button:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+
+  .cards { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; }
+  .card { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; padding: 12px; border-radius: 10px; cursor: pointer; }
+  .card + .card { border-top: 1px solid var(--border); border-radius: 0; }
+  .card:hover { background: var(--surface-1); }
+  .card input.chk { grid-row: 1 / span 2; align-self: start; margin-top: 2px; width: 17px; height: 17px; accent-color: var(--text-accent); cursor: pointer; }
+  .card .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card .id { font: 500 13px/1.3 var(--font-mono); font-variant-numeric: tabular-nums; }
+  .card .title { font-weight: 500; font-size: 14px; white-space: pre-wrap; }
+  .card .desc { color: var(--text-muted); font-size: 13px; }
+  .card.struck .title, .card.struck .id, .card.struck .desc { color: var(--text-muted); }
+  .card.struck .title, .card.struck .id { text-decoration: line-through; }
+
+  /* Findings: Severity vom Review -> statischer, nicht aenderbarer Badge (Sentence case). */
+  .card .badge {
+    margin-left: auto; white-space: nowrap; font: 500 11px/1 var(--font-mono);
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .card .badge.blocker { background: var(--bg-danger); color: var(--text-danger); }
+  .card .badge.major   { background: var(--bg-warning); color: var(--text-warning); }
+  .card .badge.minor   { background: var(--surface-1); color: var(--text-secondary); }
+
+  /* Custom-Punkte: mehrzeilig editierbar + loeschbar, mit aenderbarer Severity-Pill. */
+  .card .title[contenteditable] { outline: none; border-bottom: 1px dashed transparent; cursor: text; min-width: 60px; }
+  .card .title[contenteditable]:hover { border-bottom-color: var(--border); }
+  .card .title[contenteditable]:focus { border-bottom-color: var(--text-accent); }
+  .card.struck .title[contenteditable] { text-decoration: none; }
+  .card .del {
+    appearance: none; border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
+    font-size: 17px; line-height: 1; padding: 0 4px; border-radius: 6px;
+  }
+  .card .del:hover { color: var(--text-danger); background: var(--surface-1); }
+  .card .del:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+
+  /* Severity-Pill (nur Custom + Eingabefeld): nativer Select in Badge-Optik. */
+  .prio-wrap { position: relative; display: inline-flex; align-items: center; border-radius: 999px; }
+  .card .prio-wrap { margin-left: auto; }
+  .prio-wrap select {
+    appearance: none; border: 0; background: transparent; color: inherit; cursor: pointer;
+    font: 500 11px/1 var(--font-mono); padding: 3px 19px 3px 8px; border-radius: 999px;
+  }
+  .prio-wrap select:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+  .prio-wrap .caret { position: absolute; right: 7px; font-size: 9px; color: var(--text-muted); pointer-events: none; }
+  .prio-wrap option { color: var(--text-primary); background: var(--surface-2); }
+  .prio-wrap.blocker { background: var(--bg-danger); color: var(--text-danger); }
+  .prio-wrap.major   { background: var(--bg-warning); color: var(--text-warning); }
+  .prio-wrap.minor   { background: var(--surface-1); color: var(--text-secondary); }
+
+  .legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--border); font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
+  .legend .sep { color: var(--border); }
+  /* Legende = Filter-Toggle (Blocker/Major/Minor nach Severity, Custom nach Herkunft). Groesse hier
+     explizit klein — genau die Werte, die im Host INLINE gesetzt werden muessen, sonst blaeht die
+     button-Basisregel die Schalter auf Control-Hoehe. inert behaelt die Rollenfarbe (ein leerer
+     Blocker-Toggle muss rot bleiben — "keine roten Badges" ist selbst ein Signal) und verliert nur
+     die Interaktion. */
+  .legend .sevtoggle {
+    appearance: none; border: 0; cursor: pointer; font: 500 11px/1.4 var(--font-mono);
+    padding: 2px 8px; min-height: 0; height: auto; border-radius: 999px; transition: filter .12s;
+  }
+  .legend .sevtoggle.blocker { background: var(--bg-danger); color: var(--text-danger); }
+  .legend .sevtoggle.major   { background: var(--bg-warning); color: var(--text-warning); }
+  .legend .sevtoggle.minor   { background: var(--surface-1); color: var(--text-secondary); border: .5px solid var(--border); }
+  .legend .sevtoggle.custom  { background: var(--bg-accent); color: var(--text-accent); }
+  .legend .sevtoggle:not(.inert):hover { filter: brightness(1.06); }
+  .legend .sevtoggle.inert { cursor: default; }
+  .legend .sevtoggle:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+
+  .foot { padding: 14px 16px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .addcol { display: flex; flex-direction: column; gap: 8px; }
+  .addcol textarea {
+    width: 100%; resize: none; overflow: hidden; min-height: 40px; font: 400 14px/1.45 var(--font-sans);
+    color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px;
+  }
+  .addcol textarea::placeholder { color: var(--text-muted); }
+  .addcol textarea:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 1px; border-color: transparent; }
+  .addctl { display: flex; align-items: center; gap: 8px; }
+  .addctl .lead { font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
+  .addbtn {
+    appearance: none; cursor: pointer; white-space: nowrap; margin-left: auto; height: 34px;
+    font: 500 13px/1 var(--font-sans); color: var(--text-primary); background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 9px; padding: 0 14px; transition: background .12s;
+  }
+  .addbtn:hover { background: var(--surface-2); }
+  .addbtn:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+  .khint { font: 500 11px/1.6 var(--font-mono); color: var(--text-muted); }
+  kbd { font: 500 11px/1 var(--font-mono); background: var(--surface-1); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 2px 5px; color: var(--text-secondary); }
+  /* Submit: nicht accent-fuellen (Host stylt Buttons). Nur Layout + neutrale Flaeche fuer Standalone. */
+  .submit {
+    appearance: none; cursor: pointer; width: 100%; margin-top: 2px; font: 500 14px/1 var(--font-sans);
+    color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
+    padding: 11px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .12s;
+  }
+  .submit:hover { background: var(--surface-2); }
+  .submit:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 3px; }
+  .submit .sk { font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
+
+  /* ==== OFFENE FRAGEN — eigener, vom Findings-Block abgetrennter Bereich ======================
+     Andere Interaktion als Findings: nicht posten/streichen, sondern EINE Wahl pro Frage
+     (a=SOTA / b=Grosse / c=Empfehlung / eigene Antwort). c ist vorbelegt; der User uebersteuert
+     nur, wo er anders entscheidet. Der a/b/c-Text ist read-only, waehlbar ist nur, welche Option
+     gilt. Leeres QUESTIONS -> der ganze Bereich bleibt aus dem DOM (kein leerer Rahmen). ======= */
+  .qsection { border-top: 1px solid var(--border); }
+  .qhead { padding: 12px 16px 6px; font: 500 11px/1.3 var(--font-mono); color: var(--text-muted); }
+  .qlist { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .qcard { padding: 12px; border-radius: 10px; }
+  .qcard .qtop { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+  .qcard .qid { font: 500 13px/1.3 var(--font-mono); color: var(--text-accent); }
+  .qcard .qtitle { font-weight: 500; font-size: 14px; color: var(--text-primary); }
+  .qcard .qfile { grid-column: 2; font: 400 12px/1.4 var(--font-mono); color: var(--text-muted); margin-bottom: 6px; }
+  .qcard .qexplain { font: 400 13px/1.45 var(--font-sans); color: var(--text-secondary); margin-bottom: 8px; }
+  .qcard .qexplain .k { font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); }
+  .qopts { display: flex; flex-direction: column; gap: 2px; }
+  /* Eine Option = klickbare Zeile mit Radio. Gewaehlte Zeile dezent hervorgehoben. */
+  .qopt { display: grid; grid-template-columns: auto auto 1fr; align-items: start; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+  .qopt:hover { background: var(--surface-1); }
+  .qopt input.rad { grid-row: 1; align-self: start; margin-top: 2px; width: 16px; height: 16px; accent-color: var(--text-accent); cursor: pointer; }
+  .qopt .olabel { font: 500 11px/1.5 var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
+  .qopt .otext { font: 400 13px/1.45 var(--font-sans); color: var(--text-secondary); }
+  .qopt.chosen { background: var(--surface-1); }
+  .qopt.chosen .otext { color: var(--text-primary); }
+  .qopt .def { font: 500 10px/1 var(--font-mono); color: var(--text-accent); background: var(--bg-accent); border-radius: 999px; padding: 2px 6px; margin-left: 6px; white-space: nowrap; }
+  /* Custom-Antwort-Zeile: Radio + Inline-Textfeld. Fokus/Tippen aktiviert das Radio automatisch. */
+  .qopt .cinput {
+    grid-column: 3; width: 100%; resize: none; overflow: hidden; min-height: 32px;
+    font: 400 13px/1.45 var(--font-sans); color: var(--text-primary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
+  }
+  .qopt .cinput::placeholder { color: var(--text-muted); }
+  .qopt .cinput:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 1px; border-color: transparent; }
+  .qopt:focus-within { background: var(--surface-1); }
+</style>
+</head>
+<body>
+<!-- GERUEST: Zentrier-Wrapper, nicht uebernehmen -->
+<div class="wrap">
+
+  <!-- ==== VORLAGE: ab hier 1:1 in den Host uebernehmen ==== -->
+  <div class="widget" role="group" aria-label="Freigabe der Review-Findings">
+    <div class="whead">
+      <div class="counter">
+        <span class="cnum"><span id="cnt">0</span> von <span id="tot">0</span></span>
+        <span class="clabel">werden gepostet</span>
+      </div>
+      <div class="seg" role="group" aria-label="Alle oder keine">
+        <button type="button" id="allBtn" aria-pressed="true">Alle</button>
+        <button type="button" id="noneBtn" aria-pressed="false">Keine</button>
+      </div>
+      <div class="hspace" aria-hidden="true"></div>
+    </div>
+
+    <ul class="cards" id="cards"></ul>
+
+    <div class="legend" aria-label="Filter nach Severity und Herkunft">
+      <span>Skala:</span>
+      <button type="button" class="sevtoggle blocker" data-key="blocker">Blocker</button><span class="sep">·</span>
+      <button type="button" class="sevtoggle major" data-key="major">Major</button><span class="sep">·</span>
+      <button type="button" class="sevtoggle minor" data-key="minor">Minor</button><span class="sep">·</span>
+      <button type="button" class="sevtoggle custom" data-key="custom">Custom</button>
+    </div>
+
+    <!-- Offene Fragen: eigener Bereich, andere Interaktion (Wahl statt posten/streichen).
+         Wird per JS entfernt, wenn QUESTIONS leer ist. -->
+    <div class="qsection" id="qsection">
+      <div class="qhead">Offene Fragen — bitte entscheiden (Empfehlung ist vorbelegt)</div>
+      <ul class="qlist" id="questions"></ul>
+    </div>
+
+    <div class="foot">
+      <div class="addcol">
+        <textarea id="composer" rows="1" placeholder="Eigene Punkte dazu? (Enter = neue Zeile)" aria-label="Eigenen Punkt hinzufuegen"></textarea>
+        <div class="addctl">
+          <span class="lead">Prio:</span>
+          <span class="prio-wrap blocker" id="newPrioWrap">
+            <select id="newPrio" aria-label="Severity des neuen Punkts">
+              <option value="blocker" selected>Blocker</option>
+              <option value="major">Major</option>
+              <option value="minor">Minor</option>
+            </select>
+            <span class="caret" aria-hidden="true">▾</span>
+          </span>
+          <button type="button" class="addbtn" id="addBtn" title="Strg/Cmd+Shift+Enter">Hinzufuegen</button>
+        </div>
+      </div>
+      <div class="khint">
+        <kbd>Enter</kbd> neue Zeile · <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> freigeben (nimmt
+        offenen Text mit) · <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> hinzufuegen
+      </div>
+      <button type="button" class="submit" id="submit">Freigeben&nbsp;↗ <span class="sk">Strg/⌘+Enter</span></button>
+    </div>
+  </div>
+  <!-- ==== /VORLAGE ==== -->
+
+  <!-- GERUEST: Standalone-Anzeige des sendPrompt()-Payloads + manueller Copy-Rueckfall, nicht
+       uebernehmen. Der Text steht in .ptext (damit der Copy-Button beim Neusetzen erhalten bleibt). -->
+  <div class="out">
+    <div class="lbl">sendPrompt() — Fallback (standalone)</div>
+    <div class="payload" id="payload"><span class="ptext" id="ptext"><span class="muted">Noch nichts freigegeben.</span></span><button type="button" class="copybtn" id="copyBtn" aria-label="Payload in die Zwischenablage kopieren">Copy</button></div>
+  </div>
+</div>
+
+<script>
+  // INJECTION-POINT: aus dem Stufe-A-Report befuellen. Reihenfolge = Nummern aus Stufe A.
+  // sev ist eine der drei Severities: "blocker" | "major" | "minor". READ-ONLY fuer Findings.
+  // sev ist eine der drei Severities. Findings tragen ihre Empfehlung im desc-Text selbst — kein
+  // eigenes a/b/c (das gibt es nur bei den offenen Fragen, siehe QUESTIONS).
+  const FINDINGS = [
+    { n: 1, sev: "blocker", title: "Kein Escaping fuer Trennzeichen", file: "export/CsvWriter.cs:88",
+      desc: "Felder mit Semikolon brechen die CSV-Struktur; RFC-4180-Quoting fehlt." },
+    { n: 2, sev: "major", title: "Reuse-Blindness: Formatter dupliziert", file: "export/CsvWriter.cs:12",
+      desc: "Neuer NumberFormatter dupliziert Shared.NumberFormat — konsolidieren statt kopieren." },
+    { n: 3, sev: "minor", title: "Ungenutztes using", file: "export/CsvWriter.cs:5",
+      desc: "using System.Linq wird nicht verwendet." },
+  ];
+  const SEVS = ["blocker", "major", "minor"];         // waehlbare Severities (Achse 1)
+  const SEV_LABEL = { blocker: "Blocker", major: "Major", minor: "Minor" };
+
+  // INJECTION-POINT: offene Fragen aus dem Stufe-A-Report (Namensraum F1, F2, … getrennt von den
+  // Findings). Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Leeres Array ->
+  // der ganze Fragen-Bereich wird entfernt. Pro Frage: a=SOTA, b=Grosse, c=Empfehlung; c ist immer
+  // die Vorbelegung. explain = Klartext-Zeile ("worum geht es"), file optional.
+  const QUESTIONS = [
+    { n: 1, title: "Fehlerbehandlung im Export-Pfad", file: "export/CsvWriter.cs:40",
+      explain: "Wie soll das Programm reagieren, wenn beim Export etwas schiefgeht?",
+      a: "Result<T>-Typ statt Exceptions (moderner C#/Rust-Stil).",
+      b: "Strukturierte Exceptions mit Error-Codes (Norm in grossen .NET-Codebases).",
+      c: "Result<T> hier, weil Hot Path und kein Stacktrace-Bedarf." },
+    { n: 2, title: "Wohin mit der Format-Konstante?",
+      explain: "An welcher Stelle im Code soll der feste Formatwert stehen?",
+      a: "Zentrale Konstanten-Klasse pro Modul.",
+      b: "Options-Pattern / IConfiguration (Standard in grossen Services).",
+      c: "Options-Pattern, da bereits DI im Projekt." },
+  ];
+  const QOPT_LABEL = { a: "a · SOTA", b: "b · Grosse", c: "c · Empfehlung" };
+
+  const cardsEl = document.getElementById("cards");
+  const questionsEl = document.getElementById("questions");
+  const qsectionEl = document.getElementById("qsection");
+  const cntEl = document.getElementById("cnt");
+  const totEl = document.getElementById("tot");
+  const allBtn = document.getElementById("allBtn");
+  const noneBtn = document.getElementById("noneBtn");
+  const composer = document.getElementById("composer");
+  const addBtn = document.getElementById("addBtn");
+  const newPrio = document.getElementById("newPrio");
+  const newPrioWrap = document.getElementById("newPrioWrap");
+  const submitEl = document.getElementById("submit");
+  const payloadEl = document.getElementById("payload");
+  const ptextEl = document.getElementById("ptext");     // GERUEST: Text-Container im .payload
+  const copyBtn = document.getElementById("copyBtn");    // GERUEST: null im Host (kein .out)
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+  function allCards() { return [...cardsEl.children]; }
+  // Legende: Severity-Keys filtern nach _sev, "custom" filtert nach Herkunft.
+  function matches(card, key) { return key === "custom" ? card._origin === "custom" : card._sev === key; }
+
+  // Aenderbare Severity-Pill (nur Custom-Zeilen; Achse 1).
+  function prioPill(li, sev) {
+    const wrap = document.createElement("span");
+    wrap.className = "prio-wrap " + sev;
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Severity");
+    SEVS.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s; o.textContent = SEV_LABEL[s];
+      if (s === sev) o.selected = true;
+      sel.appendChild(o);
+    });
+    const caret = document.createElement("span");
+    caret.className = "caret"; caret.textContent = "▾"; caret.setAttribute("aria-hidden", "true");
+    wrap.appendChild(sel); wrap.appendChild(caret);
+    sel.addEventListener("change", () => { li._sev = sel.value; wrap.className = "prio-wrap " + sel.value; sync(); });
+    return wrap;
+  }
+
+  function wire(li) {
+    const box = li.querySelector("input.chk");
+    li._box = box;
+    box.addEventListener("change", sync);
+    li.addEventListener("click", e => {
+      if (e.target === box) return;
+      if (e.target.closest(".title[contenteditable]") || e.target.closest(".del") || e.target.closest(".prio-wrap")) return;
+      box.checked = !box.checked; sync();
+    });
+  }
+
+  function findingCard(f) {
+    const li = document.createElement("li");
+    li.className = "card";
+    li.innerHTML =
+      '<input class="chk" type="checkbox" checked aria-label="Finding ' + f.n + ' posten">' +
+      '<div class="top"><span class="id">' + f.n + ' ·</span>' +
+      '<span class="title">' + esc(f.title) + '</span></div>' +
+      '<div class="desc">' + esc(f.file) + ' — ' + esc(f.desc) + '</div>';
+    li.dataset.n = f.n; li._sev = f.sev; li._origin = "review";
+    li._title = li.querySelector(".title");
+    const b = document.createElement("span");
+    b.className = "badge " + f.sev; b.textContent = SEV_LABEL[f.sev];
+    b.title = "Vom Review gesetzt — im Widget nicht aenderbar";
+    li.querySelector(".top").appendChild(b);
+    wire(li);
+    return li;
+  }
+
+  function customCard(text, sev) {
+    const li = document.createElement("li");
+    li.className = "card custom-card";
+    li.innerHTML =
+      '<input class="chk" type="checkbox" checked aria-label="Custom-Punkt posten">' +
+      '<div class="top"><span class="id"></span>' +
+      '<span class="title" contenteditable="true" spellcheck="false"></span>' +
+      '<button type="button" class="del" title="Loeschen" aria-label="Punkt loeschen">×</button></div>';
+    li._sev = sev; li._origin = "custom";
+    const titleEl = li.querySelector(".title");
+    titleEl.textContent = text;
+    li._title = titleEl;
+    titleEl.addEventListener("keydown", e => { if (e.key === "Escape") titleEl.blur(); });
+    li.querySelector(".top").insertBefore(prioPill(li, sev), li.querySelector(".del"));
+    li.querySelector(".del").addEventListener("click", e => { e.stopPropagation(); li.remove(); renumber(); sync(); });
+    wire(li);
+    return li;
+  }
+
+  // Custom-Punkte fortlaufend nach den Findings nummerieren, lueckenlos.
+  function renumber() {
+    let k = FINDINGS.length;
+    allCards().forEach(c => { if (c._origin === "custom") { k++; c.dataset.n = k; c.querySelector(".id").textContent = k + " ·"; } });
+  }
+
+  FINDINGS.forEach(f => cardsEl.appendChild(findingCard(f)));
+
+  // ---- Offene Fragen -------------------------------------------------------------------------
+  // Hebt die "chosen"-Markierung auf die aktuell gewaehlte Option.
+  function updateChosen(li) {
+    li.querySelectorAll(".qopt").forEach(o => {
+      o.classList.toggle("chosen", o.querySelector(".rad").checked);
+    });
+  }
+  // Liefert die Entscheidung: { val: "a"|"b"|"c"|"custom", text }. Leeres Custom faellt auf die
+  // Empfehlung zurueck (Default-Prinzip: im Zweifel c).
+  function getChoice(li) {
+    const q = li._q;
+    const sel = li.querySelector(".rad:checked");
+    const val = sel ? sel.value : "c";
+    if (val === "custom") {
+      const t = li._cinput.value.trim();
+      if (t) return { val: "custom", text: t };
+      return { val: "c", text: q.c };            // leeres Custom -> Empfehlung
+    }
+    return { val, text: q[val] };
+  }
+
+  function optRow(name, val, label, text, isDefault) {
+    const l = document.createElement("label");
+    l.className = "qopt" + (isDefault ? " chosen" : "");
+    l.dataset.val = val;
+    l.innerHTML =
+      '<input class="rad" type="radio" name="' + name + '" value="' + val + '"' + (isDefault ? " checked" : "") + '>' +
+      '<span class="olabel">' + label + '</span>' +
+      '<span class="otext">' + esc(text) + (isDefault ? '<span class="def">Vorbelegt</span>' : "") + '</span>';
+    return l;
+  }
+
+  function questionCard(q) {
+    const li = document.createElement("li");
+    li.className = "qcard";
+    li._q = q;
+    const name = "q-" + q.n;
+    li.innerHTML =
+      '<div class="qtop"><span class="qid">F' + q.n + '</span>' +
+      '<span class="qtitle">' + esc(q.title) + '</span></div>' +
+      (q.file ? '<div class="qfile">' + esc(q.file) + '</div>' : "") +
+      (q.explain ? '<div class="qexplain"><span class="k">&rarr; heisst:</span> ' + esc(q.explain) + '</div>' : "") +
+      '<div class="qopts"></div>';
+    const opts = li.querySelector(".qopts");
+    if (q.a) opts.appendChild(optRow(name, "a", QOPT_LABEL.a, q.a, false));
+    if (q.b) opts.appendChild(optRow(name, "b", QOPT_LABEL.b, q.b, false));
+    opts.appendChild(optRow(name, "c", QOPT_LABEL.c, q.c, true));   // c immer vorbelegt
+
+    // Custom-Antwort-Zeile mit Inline-Textfeld.
+    const cl = document.createElement("label");
+    cl.className = "qopt"; cl.dataset.val = "custom";
+    cl.innerHTML =
+      '<input class="rad" type="radio" name="' + name + '" value="custom">' +
+      '<span class="olabel">Eigene</span>' +
+      '<textarea class="cinput" rows="1" placeholder="Eigene Antwort statt a/b/c …" aria-label="Eigene Antwort zu F' + q.n + '"></textarea>';
+    opts.appendChild(cl);
+    li._cinput = cl.querySelector(".cinput");
+
+    li.querySelectorAll(".rad").forEach(r => r.addEventListener("change", () => updateChosen(li)));
+    const ci = li._cinput;
+    const pickCustom = () => { cl.querySelector(".rad").checked = true; updateChosen(li); };
+    ci.addEventListener("focus", pickCustom);
+    ci.addEventListener("input", () => { pickCustom(); ci.style.height = "auto"; ci.style.height = ci.scrollHeight + "px"; });
+    return li;
+  }
+
+  // Leeres QUESTIONS -> ganzen Bereich entfernen (kein leerer Rahmen).
+  if (QUESTIONS.length) QUESTIONS.forEach(q => questionsEl.appendChild(questionCard(q)));
+  else qsectionEl.remove();
+
+  function sync() {
+    const cs = allCards();
+    const posted = cs.filter(c => c._box.checked);
+    cntEl.textContent = posted.length;
+    totEl.textContent = cs.length;
+    cs.forEach(c => c.classList.toggle("struck", !c._box.checked));
+    allBtn.setAttribute("aria-pressed", String(cs.length > 0 && posted.length === cs.length));
+    noneBtn.setAttribute("aria-pressed", String(posted.length === 0));
+    document.querySelectorAll(".sevtoggle").forEach(btn => {
+      const has = cs.some(c => matches(c, btn.dataset.key));
+      btn.classList.toggle("inert", !has);
+      if (has) btn.removeAttribute("aria-disabled"); else btn.setAttribute("aria-disabled", "true");
+    });
+  }
+
+  allBtn.addEventListener("click", () => { allCards().forEach(c => c._box.checked = true); sync(); });
+  noneBtn.addEventListener("click", () => { allCards().forEach(c => c._box.checked = false); sync(); });
+
+  document.querySelectorAll(".sevtoggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const members = allCards().filter(c => matches(c, btn.dataset.key));
+      if (!members.length) return;
+      const allOn = members.every(c => c._box.checked);
+      members.forEach(c => c._box.checked = !allOn);
+      sync();
+    });
+  });
+
+  // Severity-Vorauswahl fuers neue Item (sticky).
+  newPrio.addEventListener("change", () => { newPrioWrap.className = "prio-wrap " + newPrio.value; });
+
+  function grow() { composer.style.height = "auto"; composer.style.height = composer.scrollHeight + "px"; }
+  composer.addEventListener("input", grow);
+
+  function addCustom() {
+    const t = composer.value.replace(/\s+$/, "");
+    if (!t.trim()) return;
+    cardsEl.appendChild(customCard(t, newPrio.value));
+    composer.value = ""; grow();
+    renumber(); sync();
+    composer.focus();
+  }
+  addBtn.addEventListener("click", addCustom);
+
+  // Enter / Shift+Enter -> neue Zeile (Default). Strg/Cmd+Enter -> freigeben (nimmt offenen
+  // Composer-Text automatisch als Punkt mit). Strg/Cmd+Shift+Enter -> hinzufuegen.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey) { e.preventDefault(); addCustom(); }
+    else if (e.ctrlKey || e.metaKey) { e.preventDefault(); submit(); }
+  });
+
+  function submit() {
+    if (composer.value.trim()) addCustom();   // offenen Composer-Text automatisch uebernehmen
+    const cs = allCards();
+    const posted = cs.filter(c => c._box.checked);
+    const struck = cs.filter(c => !c._box.checked);
+    let out;
+    if (!posted.length) {
+      out = "Freigabe: nichts posten" + (struck.length ? "\nGestrichen: " + struck.map(c => "#" + c.dataset.n).join(", ") : "");
+    } else {
+      const lines = ["Freigabe posten:"];
+      posted.forEach(c => {
+        const head = "  #" + c.dataset.n + " [" + SEV_LABEL[c._sev] + "]";
+        if (c._origin !== "custom") { lines.push(head + " " + c._title.textContent.trim()); return; }
+        // Custom-Punkt: Text (ggf. mehrzeiliges Markdown) verbatim erhalten, nicht flach machen.
+        const txt = c._title.textContent.replace(/\s+$/, "");
+        if (txt.includes("\n")) { lines.push(head + " Custom:"); txt.split("\n").forEach(l => lines.push("      " + l)); }
+        else { lines.push(head + " Custom: " + txt.trim()); }
+      });
+      if (struck.length) lines.push("Gestrichen: " + struck.map(c => "#" + c.dataset.n).join(", "));
+      out = lines.join("\n");
+    }
+    // Entscheidungen zu den offenen Fragen anhaengen (fuer beide Zweige oben).
+    const qcards = [...questionsEl.querySelectorAll(".qcard")];
+    if (qcards.length) {
+      const qlines = ["Entscheidungen:"];
+      qcards.forEach(li => {
+        const c = getChoice(li);
+        const tag = c.val === "custom" ? "eigene" : QOPT_LABEL[c.val];
+        qlines.push("  F" + li._q.n + ": " + tag + " — " + c.text);
+      });
+      out += "\n" + qlines.join("\n");
+    }
+    if (typeof window.sendPrompt === "function") {
+      window.sendPrompt(out);
+    } else {
+      // GERUEST/Standalone: anzeigen, flashen UND in die Zwischenablage kopieren (der Nutzer muss
+      // nichts markieren). Schlaegt das Kopieren fehl, zeigt der Button sichtbares Fehl-Feedback.
+      ptextEl.textContent = out;
+      payloadEl.classList.remove("flash"); void payloadEl.offsetWidth; payloadEl.classList.add("flash");
+      copyToClipboard(out, submitEl);
+    }
+  }
+  submitEl.addEventListener("click", submit);
+
+  // ---- GERUEST/Standalone: Copy-Rueckfall ------------------------------------------------------
+  // Kurzes Feedback am Button, per gemerktem Timer zurueckgesetzt (kein Leak). Das urspruengliche
+  // innerHTML wird gesichert, damit z. B. der Submit-Button seine <span>-Struktur behaelt.
+  // prefers-reduced-motion trifft nur Animationen/Transitions (globale Regel) — der Textwechsel
+  // bleibt, ohne erzwungenen Flash.
+  function flashBtn(btn, msg) {
+    if (btn._t) clearTimeout(btn._t); else btn.dataset.orig = btn.innerHTML;
+    btn.textContent = msg;
+    btn._t = setTimeout(() => { btn.innerHTML = btn.dataset.orig; btn._t = null; }, 1500);
+  }
+  // Synchroner Rueckfall fuer Kontexte ohne async Clipboard-API (file://, sandboxed, non-secure):
+  // temporaeres textarea + execCommand("copy"), an die User-Geste gekoppelt.
+  function execCopy(text) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  }
+  // Erst die async API (nur im secure context, sonst weist sie unter file:// still ab), dann
+  // execCommand als Rueckfall. Scheitern beide, sichtbares Fehl-Feedback statt stiller Schlucken.
+  function copyToClipboard(text, btn) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => flashBtn(btn, "Kopiert ✓"))
+        .catch(() => flashBtn(btn, execCopy(text) ? "Kopiert ✓" : "Kopieren fehlgeschlagen"));
+      return;
+    }
+    flashBtn(btn, execCopy(text) ? "Kopiert ✓" : "Kopieren fehlgeschlagen");
+  }
+  // copyBtn ist nur im GERUEST vorhanden (im Host entfaellt .out) -> guard.
+  if (copyBtn) copyBtn.addEventListener("click", () => copyToClipboard(ptextEl.textContent, copyBtn));
+
+  sync();
+</script>
+</body>
+</html>

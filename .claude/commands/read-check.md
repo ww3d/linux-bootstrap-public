@@ -8,7 +8,7 @@ Kontext injiziert, hier auf Zuruf ("was hast du gelesen").
 
 ## Vorgehen
 
-1. Führe den generischen Hook aus und lies seine Ausgabe:
+1. Fuehre den generischen Hook aus und lies seine Ausgabe:
 
    ```
    CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" \
@@ -18,7 +18,7 @@ Kontext injiziert, hier auf Zuruf ("was hast du gelesen").
    Die Ausgabe ist ein JSON-Objekt; der Quittungstext steht in
    `.hookSpecificOutput.additionalContext`.
 
-2. Falls `jq` verfügbar ist, extrahiere den Text mit
+2. Falls `jq` verfuegbar ist, extrahiere den Text mit
    `... | jq -r '.hookSpecificOutput.additionalContext'`; sonst lies das Feld aus
    dem JSON heraus.
 
