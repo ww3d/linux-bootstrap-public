@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und trennt Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidung noetig -> User stimmt ab, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt). Legt beides vor jeder Veroeffentlichung erst als lesbaren Chat-Report plus Widget zur Freigabe vor, postet dann den Review, wartet auf Pushes, reviewt neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert, wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "3.0.1"
+  version: "4.0.0"
   source: ww3d/playbook
 ---
 
@@ -352,42 +352,44 @@ Unsicherheit den PR-Zustand aktiv nachladen.
      **die in dieser Runde adressierten Threads sofort resolven** (`resolve_thread`) →
      `reviewed_sha` aktualisieren, zurueck zu Phase 2.
 
-**Resolven passiert in jeder Runde, nicht erst am Ende.** Sobald ein Punkt adressiert ist, wird sein
-Thread aufgeloest — auch wenn der PR insgesamt noch nicht durch ist. Wer bis Phase 4 wartet, laesst
-den Author raten, was schon erledigt ist, und haengt die Restpunkte in einer Wand alter Threads.
+**Resolven passiert in jeder Runde, nicht erst am Ende** — wer bis Phase 4 wartet, laesst den Author
+raten, was schon erledigt ist, und haengt die Restpunkte in einer Wand alter Threads.
 
-## Phase 4: Resolve + Approve
+## Phase 4: Resolve + Abschluss
 
 [HARD-GATE]
-Vor dem Approve, ausnahmslos — jeder Punkt muss erfuellt sein:
+Vor jedem **positiven Abschluss-Verdikt**, ausnahmslos — jeder Punkt muss erfuellt sein.
+
+**Positives Abschluss-Verdikt** heisst: jede Aussage, die den PR als fertig, sauber, passend,
+approve-faehig oder mergebar bezeichnet — auch relativiert („aus meiner Sicht", „im Grunde", „bis
+auf Kleinigkeiten"). **Kanal egal:** `APPROVE`-Event, `COMMENT`-Review, Issue-Kommentar, Satz im
+Chat sagen dem `maintainer` alle „du kannst mergen" und binden dieses Gate, auch wo GitHub keins
+zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischenverdikte `Blockiert` /
+`Approvebar nach Fixes` — dort sind die Threads der Grund.
 
 1. CI gruen — `pull_request_read` method=`get_check_runs`.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — kein Blocker.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**
    approven, unabhaengig vom CI-Signal.
-4. **Threads verifiziert leer (nicht aus dem Gedaechtnis, sondern nachgezaehlt).**
-   `get_review_comments` frisch abrufen und die **selbst eroeffneten** Threads durchzaehlen: jeder
-   muss `resolved` sein. Ist einer offen und sein Punkt am Head adressiert → jetzt `resolve_thread`.
-   Ist einer offen und *nicht* adressiert → **kein** Approve/kein "passt"-Verdikt, zurueck in den
-   Loop. Ergebnis der Zaehlung muss **null offene eigene Threads** sein; das ist eine gepruefte
-   Vorbedingung, keine Erinnerung. Offene Threads *anderer* Reviewer werden nie selbst resolved,
-   aber vor dem Approve benannt.
+4. **Eigene Threads leer — Vorbedingung des Schreibens, keine Nachpruefung.** Erst resolven, dann
+   schreiben: `get_review_comments` frisch abrufen, die **selbst eroeffneten** Threads durchzaehlen,
+   jeden am Head adressierten Punkt jetzt `resolve_thread` (`threadId=PRRT_...`). Das Verdikt zu
+   formulieren, bevor die Zaehlung **null offene eigene Threads** ergibt, ist selbst schon der
+   Verstoss — nicht erst das Absenden. Ist ein Thread offen und sein Punkt *nicht* adressiert →
+   zurueck in den Loop. Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt
+   benannt.
 5. PR-Body woertlich nach `Closes #` / `Fixes #` / `Resolves #` durchsuchen. Fehlt es — **nicht**
    approven (blocken, oder nach dem Merge manuell schliessen).
-6. Self-authored PR (Autor = eigener Reviewer-Account): nur `event: COMMENT` erlaubt — APPROVE
-   ist gesperrt. **Das entbindet nicht von Punkt 4:** auch wenn kein echtes APPROVE gesetzt werden
-   kann, zieht das abschliessende "approve-faehig / passt"-COMMENT-Verdikt dieselbe verifizierte
-   Thread-Leere wie ein Approve. Kein "passt" mit offenen eigenen Threads.
-7. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
+6. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
-8. Beleg-Pflicht — behauptet der PR-Body Erfuellung ("gebaut / gruen / verifiziert / schnell")
+7. Beleg-Pflicht — behauptet der PR-Body Erfuellung ("gebaut / gruen / verifiziert / schnell")
    ohne stabilen Anker (Test-/`It`-Name, Funktions-/Symbolname, Variablenname,
    Kommentar-Ueberschrift oder SHA-Permalink), **nicht** approven (blockt, analog zum
    `Closes #`-Check aus Punkt 5). Ein Beleg, der nur aus branch-relativem `file:line` besteht,
    erfuellt die Pflicht nicht — die Zeile wandert mit dem naechsten Push; als Teil eines
    SHA-Permalinks ist sie in Ordnung. Was nicht real lief, muss als "nicht verifiziert" dastehen.
-9. **Traeger-Gate — nachgezaehlt, nicht erinnert.** Die zu zaehlende Menge ist fest: jeder
+8. **Traeger-Gate — nachgezaehlt, nicht erinnert.** Die zu zaehlende Menge ist fest: jeder
    **abgesetzte** Punkt (nummeriert oder als Bullet) aus den PR-Body-Abschnitten „Offene Fragen" /
    „Observations" / „Bewusst nicht", **plus** jede eigene F-Nummer, die der User auf „offen lassen"
    gesetzt hat. Ausdruecklich verworfene Punkte zaehlen nicht mit. Zu jedem verbleibenden Punkt am
@@ -406,17 +408,18 @@ Diese Gedanken bedeuten STOP — du rationalisierst:
 | "Spec passt schon, muss den Diff nicht gegenpruefen" | Spec-Verdikt ist eigenstaendig. |
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
 | "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — `get_review_comments`, Ergebnis null. |
-| "Kann eh nicht approven (self-authored), Threads egal" | Das "passt"-COMMENT zieht dieselbe Thread-Leere (Punkt 6). |
-| "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Traeger-Gate, Punkt 9. |
+| "Die Zaehlung lief, aber ein offener Thread haelt das Fazit nicht auf" | Genau das haelt es auf — erst resolven, dann schreiben (Punkt 4). |
+| "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Traeger-Gate, Punkt 8. |
 | "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |
 
-Wenn sauber: zuerst behandelte Threads aufloesen (`resolve_thread` `threadId=PRRT_...`, unbehandelte
-offen lassen), dann `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11).
-Den Nutzer informieren: "PR #N approved. Merge **nicht** ausgefuehrt — der `maintainer` merged."
+Wenn sauber: `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11) — die
+eigenen Threads sind hier bereits aufgeloest (Punkt 4), fremde bleiben unberuehrt; bei einem
+self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT`. Den Nutzer informieren: "PR #N
+abgeschlossen. Merge **nicht** ausgefuehrt — der `maintainer` merged."
 
 ## Phase 5: Funktionale Zusammenfassung
 
-Nach dem Approve im **Chat** liefern (nicht im PR):
+Nach dem Abschluss-Verdikt im **Chat** liefern (nicht im PR):
 
 - Vorher/Nachher-Zustand
 - Happy Path
@@ -434,7 +437,7 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
   als Code-Block, nie als Beschreibung dessen, was es enthielte. Die VORLAGE-Zone rechnet mit den
   Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und damit wertlos. Aufwand ist
   kein Grund, den Kanal zu wechseln.
-- **Kein offener Punkt ohne Traeger** — was dieser PR bewusst nicht loest, steht vor dem Approve
+- **Kein offener Punkt ohne Traeger** — was dieser PR bewusst nicht loest, steht vor dem Verdikt
   an einem offenen Issue, in `roadmap.md`/`backlog.md` oder als `[geplant]`/`[teilweise]`-Aussage
   in einer Architektur-Doku. PR-Body, Kommentare und Decision-Logs zaehlen nicht; eine Weitergabe
   zaehlt erst am Ziel.
@@ -442,13 +445,10 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
   an User-Kontext haengt, wird abgestimmt (Empfehlung vorbelegt), nicht praeskriptiv gepostet.
 - **CI-Gaming ist immer ein harter Blocker** — nie approven, wenn Tests/Coverage/Trigger
   manipuliert wurden, um gruen zu werden.
-- **Behandelte Threads werden in jeder Runde resolved**, nicht erst vor dem Approve — der am
-  haeufigsten vergessene Schritt. Unbehandelte bleiben offen; nie einen Thread resolven, dessen
-  Punkt noch aussteht.
-- **Vor jedem Abschluss die eigenen Threads nachzaehlen, nicht erinnern** (Phase 4 Punkt 4): frisch
-  `get_review_comments`, Ergebnis muss null offene eigene Threads sein — auch beim
-  self-authored-COMMENT-"passt", das kein echtes Approve setzen kann. Der am haeufigsten
-  uebersprungene Schritt, weil sich das "passt"-Verdikt wie der Abschluss anfuehlt.
+- **Behandelte Threads werden in jeder Runde resolved**, nicht erst vor dem Verdikt — der am
+  haeufigsten vergessene Schritt; nie einen resolven, dessen Punkt noch aussteht. Und **kein
+  positives Abschluss-Verdikt mit einem offenen eigenen Thread**, ueber keinen Kanal: erst resolven,
+  bis die frische Zaehlung null ergibt, dann schreiben (Phase 4 Punkt 4).
 - Reuse-Blindness aktiv suchen, nicht passiv abwarten.
 - **Niemals** automatisch mergen — `merge_pull_request` nur auf separate, explizite Anweisung; der
   Merge ist `maintainer`-only.
