@@ -1,8 +1,8 @@
 ---
 name: ccweb-prompt
-description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, plus den zugehoerigen Review-Prompt fuer den separaten Review-Chat; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt, Decision-Log und Review-Prompt als Output-Dateien (`YYYY-MM-DDTHH-MM-SS-<art>.md`), nicht als Chat-Block. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "review-prompt bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
+description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, plus den zugehoerigen Review-Prompt fuer den separaten Review-Chat; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt, Decision-Log und Review-Prompt als Output-Dateien (`YYYY-MM-DDTHH-MM-SS-[art].md`), nicht als Chat-Block. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "review-prompt bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "3.0.0"
+  version: "3.1.1"
   source: ww3d/playbook
 ---
 
@@ -51,6 +51,12 @@ Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 - Issue-/Label-Konvention und den Decision-Log-Ort des Repos (Konvention in `docs/decisions/README.md`
   — siehe unten).
 - Betroffene Quell-Files, damit der Prompt sie gezielt benennen kann.
+- **Uebernahme-Check — was frueheren Scheiben hierher zugewiesen wurde:** vor dem Schnitt pruefen,
+  ob eine Vorgaenger-Scheibe dieser Scheibe Punkte zugewiesen hat. Quelle ist **das Issue dieser
+  Scheibe und ihre `roadmap.md`-/`backlog.md`-Zeile** — nicht der PR-Body des Vorgaengers, den
+  niemand zurueckliest. Jeder gefundene Punkt wird im Prompt entweder als Vorgabe gefuehrt oder
+  ausdruecklich als bewusst nicht gebaut benannt; stillschweigendes Uebergehen ist genau der
+  Fehler, gegen den dieser Check steht.
 - **Quellen-Erreichbarkeits-Check:** Jede Quelle, die der Prompt referenziert (Issues,
   Decision-Logs, Konventions-Docs, fremde Repos), pruefen: existiert sie, ist sie gemergt/synced,
   und kann die **Ziel-Session** sie erreichen (Repo-Scope, Sandbox-Whitelist der Agent-Umgebung)?
@@ -84,6 +90,17 @@ vollstaendig; bei Widerspruch Prompt vs. Docs gewinnen Docs."*), danach acht Blo
    Nacktes, branch-relatives `file:line` zaehlt nicht — der naechste Push verschiebt die Zeile.
    Zusaetzlich verpflichtet der Prompt den Agenten zur **Beleg-Stand-Zeile**: einmal oben im
    PR-Body der Commit-SHA, auf den sich die Belege beziehen ("Belege beziehen sich auf `<sha>`").
+   Die Zeile wird bei jedem weiteren Push nachgezogen — sie zeigt auf den Stand, der gemergt wird,
+   nicht auf den ersten.
+   **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt der Prompt, die Doku nachzuziehen, nennt er
+   jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
+   `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
+   nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat.
+   **Offen gelassene Punkte brauchen einen Traeger.** Der Prompt verpflichtet den Agenten: was er
+   bewusst nicht baut, traegt er im selben PR an einen der drei gueltigen Orte ein — offenes Issue,
+   Zeile in `roadmap.md`/`backlog.md`, oder `[geplant]`/`[teilweise]`-Aussage in einer
+   Architektur-/Baseline-Doku. Der PR-Body allein zaehlt nicht (`AGENTS.md`
+   § "Carrier Requirement").
 4. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
 5. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
    Warnings), passend zum Test-Gate des Repos. Beleg-Pflicht: der Abschluss-Kommentar fuehrt jede
@@ -240,6 +257,16 @@ Default-Ablage ist `docs/decisions/`; fuehrt das Repo gar keine Logs, keins erzw
 Transport zur Ziel-Session; der Agent legt den Inhalt unveraendert unter dem Repo-Dateinamen der
 Consumer-Konvention ab.
 
+**Auflagen gehoeren an den Mechanismus, nicht nur ins Log.** Haelt die Design-Runde eine Bedingung
+fest, die erst bei einer spaeteren Erweiterung greift ("bei Aktivierung Pflicht: …"), steht sie
+zusaetzlich dort, wo diese Erweiterung ansetzt — an der Roadmap-Zeile des Mechanismus oder in einem
+Issue. Wer spaeter erweitert, liest die Roadmap-Zeile, nicht das Log der Runde davor.
+
+**Das Log der laufenden Runde traegt am Ende die Nachtraege der Review-Runden.** Es entsteht mit dem
+PR und muss dessen Endstand tragen; die Runden liegen nach seiner Niederschrift. Der uebergebene
+Entscheidungstext bleibt verbatim, der Abschnitt `## Nachtraege aus den Review-Runden` kommt
+abgesetzt darunter (`docs/decisions/README.md` § Immutabilitaet).
+
 Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewer zieht es von dort
 (nicht vom User weitergereicht).
 
@@ -253,6 +280,8 @@ Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewe
 - Jedes Artefakt als Output-Datei mit Verbatim-Marker, nie als Chat-Block.
 - Kein Prompt ohne die Review-Modus-Abfrage aus Schritt 3; der gewaehlte Baustein wird verbatim
   uebernommen.
+- Kein Prompt ohne den Uebernahme-Check aus Schritt 2 und ohne einzeln aufgezaehlte
+  Doku-Nachzugs-Quellen.
 
 ## Repo-Konventionen
 

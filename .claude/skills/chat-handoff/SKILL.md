@@ -1,8 +1,8 @@
 ---
 name: chat-handoff
-description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst als Kommentar oder Body-Update an die betroffenen Issues/PRs, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHH-MM-SS-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt und keinen Review-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
+description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (offenes Issue, roadmap.md/backlog.md-Zeile, [geplant]-Marker in der Architektur-Doku) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHH-MM-SS-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt und keinen Review-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
   source: ww3d/playbook
 ---
 
@@ -16,6 +16,12 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 - **Persist-first.** GitHub ist der Truth-Store. Was an ein Issue oder einen PR gehoert, wird dort
   festgehalten, **bevor** die Handoff-Datei entsteht. Die Datei traegt nur, was das Repo nicht
   hergibt — so bleibt sie klein und veraltet nicht.
+- **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die drei
+  Orte aus `AGENTS.md` § "Carrier Requirement": offenes Issue · Zeile in `roadmap.md`/`backlog.md` ·
+  `[geplant]`/`[teilweise]`-Aussage in einer Architektur-/Baseline-Doku. Issue-Kommentar und
+  PR-Body sind ausdruecklich **keine** Traeger — sie sind Chronik, die niemand als Arbeitsvorrat
+  zurueckliest. Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist
+  (Zwischenstand, Begruendung, Verweis).
 - **Verifikation statt Kopie.** Die neue Session verifiziert den Stand selbst an den genannten
   Issues/PRs. Die Datei paraphrasiert nichts, was dort ohnehin steht.
 - **Selbst-startend.** Datei anhaengen + "weiter" muss genuegen; die Resume-Anweisung in der Datei
@@ -23,9 +29,12 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 
 ## Ablauf
 
-1. **Persistieren.** Alles Offene und noch nicht Festgehaltene als Kommentar oder Body-Update an
-   die jeweiligen Issues/PRs. **Erst nach Freigabe posten** — nie ungefragt. Was keinen
-   Issue-/PR-Bezug hat, bleibt fuer Schritt 3.
+1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger: ein
+   offenes Issue (neu anlegen oder ein bestehendes erweitern), eine Zeile in
+   `roadmap.md`/`backlog.md`, oder eine `[geplant]`/`[teilweise]`-Aussage in der Architektur-Doku.
+   Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst nach
+   Freigabe posten oder committen** — nie ungefragt. Was keinen Issue-/PR-Bezug hat, bleibt fuer
+   Schritt 3.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
    aber nirgends persistiert" ist — getroffene Entscheidungen ohne Log-Eintrag, ausgeraeumte
    Fehlannahmen, vertagte Punkte, laufende Auftraege. Die Liste vorlegen und bestaetigen lassen,
@@ -71,6 +80,8 @@ dann weiter mit: <naechster Schritt>.
 ## Strikte Regeln
 
 - Nichts nach GitHub posten ohne Freigabe — auch nicht "nur schnell den Stand".
+- **Kein offener Punkt in einen Kommentar.** Ein Issue-Kommentar oder Body-Update meldet den Punkt,
+  traegt ihn aber nicht — er braucht einen der drei Traeger aus dem Kernprinzip.
 - Die Datei dupliziert keinen Issue-/PR-Inhalt; wo etwas persistiert wurde, steht nur die Referenz.
 - Kein Handoff ohne den Vollstaendigkeits-Check aus Schritt 2.
 - Der Handoff baut keinen Auftrags-Prompt und keinen Review-Prompt — das ist `ccweb-prompt`

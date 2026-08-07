@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und trennt Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidung noetig -> User stimmt ab, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt). Legt beides vor jeder Veroeffentlichung erst als lesbaren Chat-Report plus Widget zur Freigabe vor, postet dann den Review, wartet auf Pushes, reviewt neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert, wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "2.5.0"
+  version: "3.0.1"
   source: ww3d/playbook
 ---
 
@@ -135,6 +135,27 @@ Optional (nur fuer den Polling-Fallback relevant):
    - **PR-Body-vs-Diff-Konsistenz:** auf Phantom Changes (Body behauptet Aenderungen, die nicht im
      Diff sind), Scope-Understatement (Diff tut mehr als der Body sagt) und Placeholder-
      Descriptions pruefen.
+   - **Backlog-Gegencheck (beide Richtungen).** Erledigt der PR einen Eintrag, der in
+     `backlog.md`, `roadmap.md` oder einem Issue als offen gefuehrt wird, **muss er ihn im selben
+     PR streichen** (durchstreichen, nicht loeschen) — sonst taucht er in der naechsten
+     Design-Runde wieder als offen auf und beschreibt womoeglich einen Stand, den es nicht mehr
+     gibt. Umgekehrt gilt die Zaehlregel oben: was der PR offen laesst, braucht einen Traeger. Bei
+     Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen — `architecture.md`,
+     `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel ("die Doku nachziehen")
+     laesst genau die Quelle durchfallen, die niemand im Kopf hat.
+   - **Mitgeliefertes Log gegen die Review-Runden gelesen?** Ein Decision-Log, das **in diesem PR
+     neu entsteht**, traegt dessen Endstand — die Review-Runden liegen nach seiner Niederschrift.
+     Pruefen: steht dort ein Punkt noch als ungetragen, der inzwischen einen Traeger hat?
+     Beschreibt es einen Scope, den der reale Diff nicht mehr hat? Dann fehlt der Abschnitt
+     `## Nachtraege aus den Review-Runden` am Ende des Files → Finding. **Das hebt den
+     Verbatim-Check oben nicht auf:** der uebergebene Entscheidungstext bleibt byte-identisch, der
+     Nachtrag steht abgesetzt darunter (`docs/decisions/README.md` § Immutabilitaet).
+   - **Zeigen die Belege auf den Stand, der gemergt wird?** Nach jedem Push und jedem Rebase
+     wandern sie mit. Beleg-Stand-Zeile, SHA-Permalinks **und jede Mengenangabe im Body** (Zeilen-,
+     Test-, Datei-, Funktionszahlen) gegen den aktuellen Head pruefen — was auf einen anderen Stand
+     zeigt, ist ein Finding. Mengenangaben sind Teil des Diffs, nicht der Vorgeschichte: die Regel
+     gilt nicht nur beim Schreiben einer Zahl, sondern **rueckwirkend bei jedem Commit, der eine
+     schon geschriebene Zahl bewegt**.
 
    **Beim Sammeln pro Punkt festlegen (fuer die Freigabe in Schritt 4):**
    - **Art:** Finding oder offene Frage (Kernprinzip "Zwei Punkte-Arten"). Ein klarer Bug ohne
@@ -142,6 +163,38 @@ Optional (nur fuer den Polling-Fallback relevant):
      den nur der User hat, ist es eine offene Frage — nicht praeskriptiv als Finding verkleiden. Zu den
      offenen Fragen zaehlen **beide Quellen**: was der Autor im PR selbst offen gelassen hat
      (Stufe-A-Autor-Kontext) **und** was Claude im Review als offen erkennt.
+   - **Zaehlregel fuer Autor-Punkte:** jeder abgesetzte Punkt (nummeriert oder als Bullet), den der
+     PR-Body offen laesst (Abschnitte "Offene Fragen", "Observations", "Bewusst nicht"), bekommt
+     **genau eine eigene F-Nummer**. Die Form ist nirgends vorgeschrieben — `AGENTS.md`
+     § "PR / MR Description" verlangt fuenf Ueberschriften, keine Listenform; eine Zaehlmenge, die
+     an der Nummerierung haengt, laesst sich durch Bullets umgehen. Kein Buendeln mehrerer Punkte
+     zu einer Frage, kein Weglassen mit der Begruendung "ausserhalb des Auftrags" oder "vom Autor
+     korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt, entscheidet der User, nicht der
+     Review**. Die Zahl der F-Nummern aus Autor-Quelle muss
+     der Zahl der Punkte im PR-Body entsprechen; die eigenen Funde zaehlen zusaetzlich. Behauptet
+     der Body, ein Punkt sei anderswo bereits getrackt (Issue, Roadmap-/Pool-Zeile, Backlog), wird
+     dieser **Traeger am Head verifiziert** wie jeder andere Beleg — traegt er den Punkt nicht, ist
+     das ein Finding.
+   - **Traeger-Pflicht — jeder Punkt, der offen bleibt.** Ein **Traeger** ist der Ort, an dem ein
+     zurueckgestellter Punkt so steht, dass man ihn wiederfindet (`AGENTS.md` § "Carrier
+     Requirement"). Gueltig sind **nur** drei Orte: offenes Issue · Zeile in
+     `roadmap.md`/`backlog.md` · Aussage in einer Architektur-/Baseline-Doku mit Marker
+     `[geplant]`/`[teilweise]`. **Nicht** gueltig: PR-Body, Review-Kommentar, Issue-Kommentar, Chat
+     — und **kein Decision-Log**: das ist das Protokoll eines Tages, gelesen fuers Warum, nie als
+     Liste des Offenen. Steht eine Auflage im Log, braucht sie zusaetzlich Issue oder Roadmap-Zeile.
+     Unmarkierte Prosa in einer Architektur-Doku zaehlt ebenfalls nicht — sie sagt nicht, dass
+     etwas offen ist. Pro offenem Punkt pruefen:
+     - **Existiert der Traeger und ist er offen?** Ein geschlossenes Issue ist kein Beleg, sondern
+       ein Finding — es sieht aus wie ein erledigter. Roadmap-/Backlog-Zeilen und Status-Marker
+       haben keinen Zustand; sie zaehlen, bis der Punkt durchgestrichen ist bzw. der Marker auf
+       `[erfuellt]` wechselt.
+     - **Traegt er wirklich diesen Punkt?** Am Head nachlesen, nie der Angabe im Body glauben.
+     - **Weitergabe an eine kuenftige Scheibe gilt erst, wenn sie am Ziel steht** — im Issue der
+       Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Der Satz im Absender-PR ist eine Notiz an
+       niemanden: der Empfaenger liest sein eigenes Issue, nicht fremde PR-Bodies. Gibt es das Ziel
+       noch nicht, gehoert der Punkt in den Backlog — nie an eine Scheibe, die niemand kennt.
+     - **Wer ihn anlegt:** der Autor, im selben PR, als Anweisung aus dem Review. Nur wenn der PR
+       keine dieser Dateien anfasst, legt der Reviewer das Issue selbst an.
    - **a/b/c fuer offene Fragen:** zu jeder offenen Frage kurz a) SOTA/modern, b) was andere machen,
      c) Empfehlung recherchieren/formulieren. Nicht spekulieren — laesst sich a) oder b) nicht sauber
      belegen, den Slot weglassen statt raten. c) ist immer Claudes eigener, begruendeter Rat.
@@ -208,6 +261,11 @@ Optional (nur fuer den Polling-Fallback relevant):
      abweicht (`F2: b`, `F3: custom …`). Ohne Angaben gilt jede kurze Bestaetigung (`k`, `ok`, `los`,
      `posten`, `machen`, `gut`) als „alle Findings posten, bei jeder Frage die Empfehlung". Custom-
      Punkte im selben Zug. Der Pfad, der nie ausfaellt.
+   - **Zwei getrennte Ausstiege, beide ausdruecklich waehlbar** (sonst rutscht jeder Punkt in den
+     bequemeren): `F3: offen lassen` — nicht als Anweisung posten, **Traeger Pflicht**; oder
+     `F3: verwerfen` — der Punkt endet ersatzlos, kein Traeger, und wird im Review-Body einzeilig
+     als verworfen protokolliert, damit die Entscheidung nachvollziehbar bleibt. Fehlt die Angabe,
+     gilt „offen lassen"; „verwerfen" wird nie unterstellt.
    - **Immer mitliefern:** ein Widget als Eingabehilfe — in jeder Runde, unabhaengig davon, ob ein
      Visualizer verfuegbar ist (rendert es nicht, ist es folgenlos; siehe Invarianten). **Nur die
      VORLAGE-Zone von `widget-reference.html` (neben dieser Datei) 1:1 uebernehmen** — das dort
@@ -228,11 +286,14 @@ Optional (nur fuer den Polling-Fallback relevant):
        eigenen Custom-Punkten, weil die dem User gehoeren.
      - **Offene Fragen sind ein eigener, vom Findings-Block klar abgetrennter Bereich** mit anderer
        Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — `a) SOTA`, `b) Grosse`,
-       `c) Empfehlung` oder eine eigene (Custom-)Antwort. **c) ist vorbelegt**; der User uebersteuert
-       nur, wo er anders entscheidet — dasselbe Default-Prinzip wie „alle Findings posten". Der
-       a/b/c-Text ist read-only (die recherchierte Aussage aus Stufe A), waehlbar ist nur, welche
-       Option gilt. Unter dem Frage-Titel steht die `→ heisst:`-Klartext-Zeile (Feld `explain` je
-       Frage), damit die Entscheidung ohne Jargon verstaendlich ist — gleiche Aussage wie in Stufe A.
+       `c) Empfehlung`, eine eigene (Custom-)Antwort, und darunter abgesetzt die beiden Ausstiege
+       `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem
+       Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt sie zu beantworten.
+       **c) ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
+       Default-Prinzip wie „alle Findings posten". Der a/b/c-Text ist read-only (die recherchierte
+       Aussage aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
+       `→ heisst:`-Klartext-Zeile (Feld `explain` je Frage), damit die Entscheidung ohne Jargon
+       verstaendlich ist — gleiche Aussage wie in Stufe A.
 
    Zwei Invarianten:
    - Das Widget **ersetzt** die Textaufforderung nie — es wird zwar immer mitgeliefert, aber die
@@ -257,7 +318,10 @@ Optional (nur fuer den Polling-Fallback relevant):
      User gewaehlte Ansatz (a/b/c oder seine Custom-Antwort), nicht die Frage. Ab hier ist es fuer
      den Author eine Vorgabe wie ein Finding; die verworfenen Optionen nur nennen, wenn die
      Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
-     waehlt, wird nicht gepostet.
+     waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein
+     Verwerfen**: der Punkt bekommt trotzdem seinen Traeger, bevor der Review abgeschlossen wird.
+     Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine ausdrueckliche Entscheidung
+     des Users, keine Nebenwirkung.
 
 6. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen, den PR auf Draft
    zuruecksetzen zu lassen (Schritt 10). HEAD-SHA des aktuellen Stands merken (`reviewed_sha`);
@@ -323,6 +387,14 @@ Vor dem Approve, ausnahmslos — jeder Punkt muss erfuellt sein:
    `Closes #`-Check aus Punkt 5). Ein Beleg, der nur aus branch-relativem `file:line` besteht,
    erfuellt die Pflicht nicht — die Zeile wandert mit dem naechsten Push; als Teil eines
    SHA-Permalinks ist sie in Ordnung. Was nicht real lief, muss als "nicht verifiziert" dastehen.
+9. **Traeger-Gate — nachgezaehlt, nicht erinnert.** Die zu zaehlende Menge ist fest: jeder
+   **abgesetzte** Punkt (nummeriert oder als Bullet) aus den PR-Body-Abschnitten „Offene Fragen" /
+   „Observations" / „Bewusst nicht", **plus** jede eigene F-Nummer, die der User auf „offen lassen"
+   gesetzt hat. Ausdruecklich verworfene Punkte zaehlen nicht mit. Zu jedem verbleibenden Punkt am
+   Head die Traeger-Referenz nachlesen (Liste in Phase 1, Schritt 3) und pruefen, dass sie ihn
+   wirklich traegt und offen ist.
+   **Ergebnis muss null traegerlose Punkte sein** — sonst **nicht approven**, dieselbe Haerte wie
+   der `Closes #`-Check aus Punkt 5.
 [/HARD-GATE]
 
 Diese Gedanken bedeuten STOP — du rationalisierst:
@@ -335,6 +407,8 @@ Diese Gedanken bedeuten STOP — du rationalisierst:
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
 | "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — `get_review_comments`, Ergebnis null. |
 | "Kann eh nicht approven (self-authored), Threads egal" | Das "passt"-COMMENT zieht dieselbe Thread-Leere (Punkt 6). |
+| "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Traeger-Gate, Punkt 9. |
+| "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |
 
 Wenn sauber: zuerst behandelte Threads aufloesen (`resolve_thread` `threadId=PRRT_...`, unbehandelte
 offen lassen), dann `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11).
@@ -356,6 +430,14 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
   Runde).
 - **Das Findings-Widget wird in jeder Runde immer mitgeliefert**, unabhaengig von der
   Visualizer-Verfuegbarkeit — es ersetzt aber nie den Text-Pfad (rendert es nicht, folgenlos).
+- **Das Widget wird immer inline gerendert** (Visualizer/`show_widget`) — nie als Datei-Anhang, nie
+  als Code-Block, nie als Beschreibung dessen, was es enthielte. Die VORLAGE-Zone rechnet mit den
+  Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und damit wertlos. Aufwand ist
+  kein Grund, den Kanal zu wechseln.
+- **Kein offener Punkt ohne Traeger** — was dieser PR bewusst nicht loest, steht vor dem Approve
+  an einem offenen Issue, in `roadmap.md`/`backlog.md` oder als `[geplant]`/`[teilweise]`-Aussage
+  in einer Architektur-Doku. PR-Body, Kommentare und Decision-Logs zaehlen nicht; eine Weitergabe
+  zaehlt erst am Ziel.
 - **Offene Fragen nie einseitig als Finding entscheiden** — wo mehrere Wege valide sind oder die Wahl
   an User-Kontext haengt, wird abgestimmt (Empfehlung vorbelegt), nicht praeskriptiv gepostet.
 - **CI-Gaming ist immer ein harter Blocker** — nie approven, wenn Tests/Coverage/Trigger

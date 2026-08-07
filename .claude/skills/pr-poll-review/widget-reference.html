@@ -45,10 +45,15 @@
   - OFFENE FRAGEN kommen aus einem zweiten, getrennten Injection-Point (QUESTIONS), Namensraum
     F1/F2/…. Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Eigener Bereich mit
     ANDERER Interaktion: nicht posten/streichen, sondern EINE Wahl pro Frage — a=SOTA / b=Grosse /
-    c=Empfehlung / eigene Antwort. c ist vorbelegt (Default-Prinzip wie „alle posten"); der
-    a/b/c-Text ist read-only, waehlbar ist nur, welche Option gilt. Optionales explain = Klartext-
-    Zeile unter dem Titel. Leeres QUESTIONS entfernt den ganzen Bereich. Eine leere Custom-Antwort
-    faellt auf c zurueck.
+    c=Empfehlung / eigene Antwort / offen lassen / verwerfen. c ist vorbelegt (Default-Prinzip wie
+    „alle posten"); der a/b/c-Text ist read-only, waehlbar ist nur, welche Option gilt. Optionales
+    explain = Klartext-Zeile unter dem Titel. Leeres QUESTIONS entfernt den ganzen Bereich. Eine
+    leere Custom-Antwort faellt auf c zurueck.
+  - DIE ZWEI AUSSTIEGE (QEXITS) sind fuer jede Frage waehlbar und stehen fest, kommen also nicht aus
+    QUESTIONS: „offen lassen" (nicht als Anweisung posten, Traeger Pflicht) und „verwerfen" (endet
+    ersatzlos, kein Traeger). Beide sind ausdruecklich waehlbar, damit kein Punkt in den bequemeren
+    rutscht; submit gibt sie unterscheidbar aus (`offen lassen` / `verwerfen` statt a/b/c/eigene).
+    Vorbelegt bleibt c — „verwerfen" wird nie unterstellt (SKILL.md, Stufe B).
 
   Tastatur: Enter/Shift+Enter = neue Zeile · Strg/Cmd+Enter = freigeben (nimmt offenen
   Composer-Text mit seiner Prio automatisch als Punkt mit) · Strg/Cmd+Shift+Enter = hinzufuegen.
@@ -248,9 +253,11 @@
 
   /* ==== OFFENE FRAGEN — eigener, vom Findings-Block abgetrennter Bereich ======================
      Andere Interaktion als Findings: nicht posten/streichen, sondern EINE Wahl pro Frage
-     (a=SOTA / b=Grosse / c=Empfehlung / eigene Antwort). c ist vorbelegt; der User uebersteuert
-     nur, wo er anders entscheidet. Der a/b/c-Text ist read-only, waehlbar ist nur, welche Option
-     gilt. Leeres QUESTIONS -> der ganze Bereich bleibt aus dem DOM (kein leerer Rahmen). ======= */
+     (a=SOTA / b=Grosse / c=Empfehlung / eigene Antwort / offen lassen / verwerfen). c ist
+     vorbelegt; der User uebersteuert nur, wo er anders entscheidet. Der a/b/c-Text ist read-only,
+     waehlbar ist nur, welche Option gilt. Die beiden Ausstiege sitzen unter einer duennen Linie —
+     sie beenden die Frage, statt sie zu beantworten, und diese Trennung muss sichtbar sein.
+     Leeres QUESTIONS -> der ganze Bereich bleibt aus dem DOM (kein leerer Rahmen). ============ */
   .qsection { border-top: 1px solid var(--border); }
   .qhead { padding: 12px 16px 6px; font: 500 11px/1.3 var(--font-mono); color: var(--text-muted); }
   .qlist { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
@@ -280,6 +287,9 @@
   .qopt .cinput::placeholder { color: var(--text-muted); }
   .qopt .cinput:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 1px; border-color: transparent; }
   .qopt:focus-within { background: var(--surface-1); }
+  /* Erster Ausstieg: duenne Linie darueber. Sie trennt die Antworten (a/b/c/eigene) von den beiden
+     Wegen, die die Frage beenden — ohne die Trennung liest sich "verwerfen" wie eine vierte Antwort. */
+  .qopt.qexit-first { margin-top: 5px; padding-top: 11px; border-top: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -369,7 +379,8 @@
   // INJECTION-POINT: offene Fragen aus dem Stufe-A-Report (Namensraum F1, F2, … getrennt von den
   // Findings). Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Leeres Array ->
   // der ganze Fragen-Bereich wird entfernt. Pro Frage: a=SOTA, b=Grosse, c=Empfehlung; c ist immer
-  // die Vorbelegung. explain = Klartext-Zeile ("worum geht es"), file optional.
+  // die Vorbelegung. explain = Klartext-Zeile ("worum geht es"), file optional. Die zwei Ausstiege
+  // stehen fest (QEXITS) und gehoeren nicht hierher.
   const QUESTIONS = [
     { n: 1, title: "Fehlerbehandlung im Export-Pfad", file: "export/CsvWriter.cs:40",
       explain: "Wie soll das Programm reagieren, wenn beim Export etwas schiefgeht?",
@@ -383,6 +394,15 @@
       c: "Options-Pattern, da bereits DI im Projekt." },
   ];
   const QOPT_LABEL = { a: "a · SOTA", b: "b · Grosse", c: "c · Empfehlung" };
+
+  // Die zwei Ausstiege stehen fest (nicht aus QUESTIONS): sie beantworten die Frage nicht, sondern
+  // beenden sie. Beide muessen ausdruecklich waehlbar sein, sonst rutscht jeder Punkt in den
+  // bequemeren (SKILL.md, Stufe B). Vorbelegt bleibt trotzdem c — "verwerfen" wird nie unterstellt.
+  const QEXITS = [
+    { val: "open",    label: "offen lassen", text: "Nicht als Anweisung posten — der Punkt bleibt offen und bekommt einen Traeger." },
+    { val: "discard", label: "verwerfen",    text: "Der Punkt endet ersatzlos, ohne Traeger — wird im Review-Body protokolliert." },
+  ];
+  const QEXIT_LABEL = Object.fromEntries(QEXITS.map(e => [e.val, e.label]));
 
   const cardsEl = document.getElementById("cards");
   const questionsEl = document.getElementById("questions");
@@ -487,8 +507,9 @@
       o.classList.toggle("chosen", o.querySelector(".rad").checked);
     });
   }
-  // Liefert die Entscheidung: { val: "a"|"b"|"c"|"custom", text }. Leeres Custom faellt auf die
-  // Empfehlung zurueck (Default-Prinzip: im Zweifel c).
+  // Liefert die Entscheidung: { val: "a"|"b"|"c"|"custom"|"open"|"discard", text }. Leeres Custom
+  // faellt auf die Empfehlung zurueck (Default-Prinzip: im Zweifel c); die beiden Ausstiege tragen
+  // ihren festen Text, damit submit sie unterscheidbar ausgibt.
   function getChoice(li) {
     const q = li._q;
     const sel = li.querySelector(".rad:checked");
@@ -498,6 +519,8 @@
       if (t) return { val: "custom", text: t };
       return { val: "c", text: q.c };            // leeres Custom -> Empfehlung
     }
+    const exit = QEXITS.find(e => e.val === val);
+    if (exit) return { val, text: exit.text };
     return { val, text: q[val] };
   }
 
@@ -537,6 +560,14 @@
       '<textarea class="cinput" rows="1" placeholder="Eigene Antwort statt a/b/c …" aria-label="Eigene Antwort zu F' + q.n + '"></textarea>';
     opts.appendChild(cl);
     li._cinput = cl.querySelector(".cinput");
+
+    // Die zwei Ausstiege, abgesetzt unter den Antwort-Optionen.
+    QEXITS.forEach((e, i) => {
+      const row = optRow(name, e.val, e.label, e.text, false);
+      row.classList.add("qexit");
+      if (i === 0) row.classList.add("qexit-first");
+      opts.appendChild(row);
+    });
 
     li.querySelectorAll(".rad").forEach(r => r.addEventListener("change", () => updateChosen(li)));
     const ci = li._cinput;
@@ -629,7 +660,7 @@
       const qlines = ["Entscheidungen:"];
       qcards.forEach(li => {
         const c = getChoice(li);
-        const tag = c.val === "custom" ? "eigene" : QOPT_LABEL[c.val];
+        const tag = c.val === "custom" ? "eigene" : (QEXIT_LABEL[c.val] || QOPT_LABEL[c.val]);
         qlines.push("  F" + li._q.n + ": " + tag + " — " + c.text);
       });
       out += "\n" + qlines.join("\n");
