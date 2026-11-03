@@ -4189,16 +4189,126 @@ expect 'sub-agent after its own read: passes' ALLOW "$(rule_verdict "$(bash_even
 expect 'the main thread is still held (its own read is owed)' DENY "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"')")"
 present_file '... and the marker stands' "$au_dir/${sid}-audit-owed"
 
+echo "== require-rule-read.sh: the skill chat-handoff owes session.md (follow-up to ww3d/playbook#526) =="
+# The same two ways in as the audit block above, through the one table skill -> trigger.
+ses_rule="$repo_root/.agents/rules/session.md"
+ses_sha="$(git -C "$repo_root" hash-object -- "$ses_rule")"
+ses_receipt_transcript="$fix/session-receipt.jsonl"
+jq -cn --arg t "+ session.md   25.0.0  ${ses_sha:0:7}   read (rule)" '{type: "assistant", message: {role: "assistant", content: [{type: "text", text: $t}]}}' > "$ses_receipt_transcript"
+sid="se-a-$$"
+out="$(printf '%s' "$(sk_event "$sid" chat-handoff)" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
+check_contains 'Skill chat-handoff, session.md unread: denied, path named' '.agents/rules/session.md' "$out"
+check_contains '... and its blob SHA' "blob $ses_sha" "$out"
+expect 'Skill anthropic-skills:chat-handoff is denied' DENY "$(rule_verdict "$(sk_event "se-b-$$" anthropic-skills:chat-handoff)")"
+expect 'Skill dev-task passes'                         ALLOW "$(rule_verdict "$(sk_event "se-c-$$" dev-task)")"
+expect 'a name that only ends alike passes'            ALLOW "$(rule_verdict "$(sk_event "se-d-$$" my-chat-handoff)")"
+sid="se-e-$$"
+record "$(read_event "$sid" "$ses_rule")"
+expect 'Skill chat-handoff after the read marker passes' ALLOW "$(rule_verdict "$(sk_event "$sid" chat-handoff)")"
+expect 'Skill chat-handoff with the receipt line passes' ALLOW "$(rule_verdict "$(sk_event "se-f-$$" chat-handoff "" "$ses_receipt_transcript")")"
+# The typed start leaves the marker of its own trigger and blocks nothing.
+for nm in chat-handoff anthropic-skills:chat-handoff /chat-handoff; do
+  sid="se-g-$$-${nm//[:\/]/_}"
+  out="$(upe_run "$(upe_event "$sid" "$nm")")"
+  check_contains "UserPromptExpansion $nm hands over additionalContext naming session.md" '.agents/rules/session.md' "$out"
+  check_not_contains '... and never blocks the expansion' '"decision"' "$out"
+  present_file '... and writes the session marker' "$au_dir/${sid}-session-owed"
+  absent_file '... and no audit marker' "$au_dir/${sid}-audit-owed"
+done
+# the marker holds every call the gate sees, until session.md is read
+sid="se-h-$$"
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+out="$(printf '%s' "$(bash_event "$sid" 'rc ask "x"')" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
+check_contains 'session marker, session.md unread: a plain Bash call is denied' '.agents/rules/session.md' "$out"
+check_contains '... the denial names the origin' 'UserPromptExpansion of chat-handoff' "$out"
+record "$(read_event "$sid" "$ses_rule")"
+expect 'after the read the same Bash call passes' ALLOW "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"')")"
+absent_file '... and the marker is gone' "$au_dir/${sid}-session-owed"
+# both markers: one call owes both, and each read lifts only its own
+sid="se-i-$$"
+upe_run "$(upe_event "$sid" ccweb-prompt)" >/dev/null
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+record "$(read_event "$sid" "$au_rule")"
+out="$(printf '%s' "$(bash_event "$sid" 'rc ask "x"')" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
+check_contains 'both markers, only audit.md read: session.md is still owed' '.agents/rules/session.md' "$out"
+check_contains '... with its own origin' 'UserPromptExpansion of chat-handoff' "$out"
+record "$(read_event "$sid" "$ses_rule")"
+expect '... after the second read the call passes' ALLOW "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"')")"
+sid="se-j-$$"
+upe_run "$(upe_event "$sid" ccweb-prompt)" >/dev/null
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+record "$(read_event "$sid" "$ses_rule")"
+out="$(printf '%s' "$(bash_event "$sid" 'rc ask "x"')" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
+check_contains 'both markers, only session.md read: audit.md is still owed' '.agents/rules/audit.md' "$out"
+check_contains '... with its own origin' 'UserPromptExpansion of ccweb-prompt' "$out"
+for nm in chat-handoff-x my-chat-handoff; do
+  sid="se-p-$$-$nm"
+  out="$(upe_run "$(upe_event "$sid" "$nm")")"
+  expect "UserPromptExpansion $nm: no marker, no output" 'absent:' "$([ -e "$au_dir/${sid}-session-owed" ] && echo present || echo absent):$out"
+done
+sid="se-q-$$"
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+expect 'session marker: a Skill call of another name is held' DENY "$(rule_verdict "$(sk_event "$sid" dev-task)")"
+expect '... and the receipt line of session.md lifts it for a Skill call' ALLOW "$(rule_verdict "$(sk_event "$sid" dev-task "" "$ses_receipt_transcript")")"
+sid="se-r-$$"
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+ev="$(jq -cn --arg s "$sid" --arg t "$ses_receipt_transcript" '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "rc ask x"}}')"
+expect 'session marker, receipt line of session.md in the transcript: the call passes' ALLOW "$(rule_verdict "$ev")"
+# no session.md in the repository: nothing is gated, no hint; a foreign session's marker has no effect
+sid="se-k-$$"
+upe_event "$sid" chat-handoff | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$bare_repo" bash "$ruleread" >/dev/null 2>&1
+present_file 'repository without session.md: the marker is written' "$au_dir/${sid}-session-owed"
+expect 'session marker, repository without session.md: the call passes' ALLOW "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"')" "$bare_repo")"
+expect 'repository without session.md: no hint' '' "$(upe_event "se-l-$$" chat-handoff | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$bare_repo" bash "$ruleread" 2>&1)"
+sid="se-m-$$"
+record "$(read_event "$sid" "$repo_root/.agents/rules/carrier.md")"
+: > "$au_dir/foreign-session-session-owed"
+expect "a foreign session's session marker does not hold a gated call" ALLOW "$(rule_verdict "$(bash_event "$sid" 'gh issue create --title x')")"
+rm -f "$au_dir/foreign-session-session-owed"
+# a sub-agent is judged by its own read; it does not lift the main thread's marker
+sid="se-n-$$"
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+expect 'sub-agent, nothing read: denied' DENY "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"' agent-1)")"
+record "$(read_event "$sid" "$ses_rule" agent-1)"
+expect 'sub-agent after its own read: passes' ALLOW "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"' agent-1)")"
+expect 'the main thread is still held (its own read is owed)' DENY "$(rule_verdict "$(bash_event "$sid" 'rc ask "x"')")"
+present_file '... and the marker stands' "$au_dir/${sid}-session-owed"
+# a hook that cannot read the transcript passes and leaves the debt of session.md standing
+sid="se-o-$$"
+upe_run "$(upe_event "$sid" chat-handoff)" >/dev/null
+ev="$(jq -cn --arg s "$sid" '{session_id: $s, transcript_path: "/nonexistent.jsonl", cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "rc ask x"}}')"
+expect 'unreadable transcript: the call passes' ALLOW "$(rule_verdict "$ev")"
+present_file '... and the session marker stands' "$au_dir/${sid}-session-owed"
+
+echo "== skill table and UserPromptExpansion matcher name the same skills (follow-up to ww3d/playbook#526) =="
+# $1 = the `skill_table=(...)` line of the hook, $2 = a matcher; prints the names only one of them holds.
+sk_parity() {
+  local tbl="$1" matcher="$2" names entries=()
+  matcher="${matcher%$'\r'}"; tbl="${tbl%$'\r'}"
+  tbl="${tbl#skill_table=(}"; tbl="${tbl%%)*}"
+  read -ra entries <<<"$tbl"
+  names="$(printf '%s\n' "${entries[@]}" | sed 's/:.*//' | sort)"
+  matcher="${matcher#*)?(}"; matcher="${matcher%)\$}"
+  diff <(printf '%s\n' "$names") <(printf '%s\n' "$matcher" | tr '|' '\n' | sort) | grep '^[<>]' | tr '\n' ' '
+}
+sk_line="$(grep '^skill_table=(' "$ruleread")"
+for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
+  um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].args[]? | test("require-rule-read\\.sh$")) | .matcher] | first // "unset"' "$sf")"
+  expect "${sf#"$repo_root"/}: the matcher names the skills of the hook's table" '' "$(sk_parity "$sk_line" "$um")"
+done
+expect 'mutation: a skill only in the table is red'   '< chat-handoff ' "$(sk_parity "$sk_line" '^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit)$')"
+expect 'mutation: a skill only in the matcher is red' '> extra-skill '  "$(sk_parity "$sk_line" '^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit|chat-handoff|extra-skill)$')"
+
 echo "== rule index: every trigger has an action that raises it, or a reasoned exception (ww3d/playbook#526) =="
 # The triggers come from the index of the rule table; an action is an `add_trigger <trigger>` of the hook. An exception
-# names its reason; one that the hook maps by now is stale.
-cov_exceptions='chat|the first answer is text; no hook event blocks text
-session|no action is mapped yet: whether the chat-handoff skill raises it is open in ww3d/playbook#526'
+# names its reason; one that the hook maps by now is stale. A trigger of the skill table counts as mapped.
+cov_exceptions='chat|the first answer is text; no hook event blocks text'
 cov_check() { # exception list -> lines "trigger: problem" for each trigger that breaks the rule, empty when it holds
   local t mapped exc reason
   while IFS= read -r t; do
     t="${t%$'\r'}"; mapped=0; exc=0; reason=""
     grep -v '^[[:space:]]*#' "$ruleread" | grep -qE "add_trigger ${t}([^A-Za-z0-9_-]|\$)" && mapped=1
+    grep '^skill_table=(' "$ruleread" | grep -qE ":${t}([ )]|\$)" && mapped=1
     if printf '%s\n' "$1" | grep -q "^${t}|"; then
       exc=1; reason="$(printf '%s\n' "$1" | grep "^${t}|" | head -n 1)"; reason="${reason#*|}"
     fi
@@ -4208,10 +4318,17 @@ cov_check() { # exception list -> lines "trigger: problem" for each trigger that
   done < <(jq -r '.rules[].trigger' "$repo_root/.agents/rules/index.json")
 }
 expect 'every trigger of the rule table has an action or a reasoned exception' '' "$(cov_check "$cov_exceptions")"
+expect 'the exception list holds chat alone' 'chat' "$(printf '%s\n' "$cov_exceptions" | cut -d'|' -f1)"
 expect 'mutation: an exception without a reason fails' 'chat: exception without a reason' "$(cov_check 'chat|
-session|x' | grep '^chat')"
+zzz|x' | grep '^chat')"
 expect 'mutation: a stale exception (audit is mapped) fails' 'audit: excepted but mapped (stale exception)' "$(cov_check "$cov_exceptions"$'\naudit|why' | grep '^audit')"
-expect 'mutation: an unmapped trigger without exception fails' 'chat: no action raises it and no exception' "$(cov_check 'session|x' | grep '^chat')"
+expect 'mutation: an unmapped trigger without exception fails' 'chat: no action raises it and no exception' "$(cov_check 'zzz|x' | grep '^chat')"
+expect 'mutation: a stale exception (session is mapped by the skill table) fails' 'session: excepted but mapped (stale exception)' "$(cov_check "$cov_exceptions"$'\nsession|why' | grep '^session')"
+# The actions a local rule may gate (gate_actions of the hook) are exactly the triggers the hook raises.
+raised="$({ grep -v '^[[:space:]]*#' "$ruleread" | grep -oE 'add_trigger [a-z]+' | sed 's/^add_trigger //'
+  grep '^skill_table=(' "$ruleread" | tr -d '\r' | sed 's/^skill_table=(//; s/).*//' | tr ' ' '\n' | sed 's/.*://'; } | grep -v '^$' | sort -u | paste -sd,)"
+listed="$(grep '^gate_actions=' "$ruleread" | tr -d '\r' | sed 's/^gate_actions="//; s/"$//; s/^,//; s/,$//')"
+expect 'gate_actions of the hook are the triggers it raises (add_trigger and skill table)' "$raised" "$listed"
 
 echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
@@ -4228,11 +4345,11 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   expect "$label: the rule gate starts for the tools tool_re names" 'Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|Skill|mcp__.*[Gg]it[Hh]ub.*' "$m"
   um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].args[]? | test("require-rule-read\\.sh$")) | .matcher] | first // "unset"' "$sf")"
   um_got=""
-  for nm in ccweb-prompt state-audit anthropic-skills:ccweb-prompt anthropic-skills:state-audit dev-task anthropic-skills:dev-task ccweb-prompt-x x-state-audit; do
+  for nm in ccweb-prompt state-audit chat-handoff anthropic-skills:ccweb-prompt anthropic-skills:state-audit anthropic-skills:chat-handoff dev-task anthropic-skills:dev-task ccweb-prompt-x x-state-audit chat-handoff-x my-chat-handoff; do
     if jq -e -n --arg m "$um" --arg n "$nm" '$n | test($m)' >/dev/null 2>&1; then um_got="$um_got $nm"; fi
   done
-  expect "$label: the UserPromptExpansion matcher covers both skills, plain and prefixed, and no other command (ww3d/playbook#526)" \
-    ' ccweb-prompt state-audit anthropic-skills:ccweb-prompt anthropic-skills:state-audit' "$um_got"
+  expect "$label: the UserPromptExpansion matcher covers the three skills, plain and prefixed, and no other command (ww3d/playbook#526)" \
+    ' ccweb-prompt state-audit chat-handoff anthropic-skills:ccweb-prompt anthropic-skills:state-audit anthropic-skills:chat-handoff' "$um_got"
   expect "$label registers guard-kill.sh for Bash|PowerShell" 1 "$g"
   expect "$label registers record-rule-read.sh for Read"      1 "$r"
   expect "$label registers save-compact-state.sh on PreCompact" 1 "$sv"

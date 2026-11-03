@@ -49,7 +49,7 @@
     ],
     "UserPromptExpansion": [
       {
-        "matcher": "^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit)$",
+        "matcher": "^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit|chat-handoff)$",
         "hooks": [
           {
             "type": "command",
