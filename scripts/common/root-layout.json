@@ -1,0 +1,86 @@
+{
+  "$comment": "Base list of the repo root (.agents/rules/code.md, section \"Folder Conventions\", rule 6), read by check-root.ps1 beside it. A path ending in / is a folder, any other a file; * matches within one name; case-sensitive. required: the check reports it missing. tracked false: allowed only untracked. A repo's own deviations go to its .agents/config/root-layout.json, never here.",
+  "schemaVersion": 1,
+  "common": [
+    { "path": "src/", "required": false },
+    { "path": "tests/", "required": false },
+    { "path": "docs/", "required": true, "note": "the sync writes docs/common/" },
+    { "path": "scripts/", "required": true, "note": "the sync writes scripts/common/" },
+    { "path": "artifacts/", "required": false, "tracked": false, "note": "build output, never checked in" },
+    { "path": ".agents/", "required": true, "note": "the sync writes the rule files" },
+    { "path": ".claude/", "required": true, "note": "the sync writes the hooks" },
+    { "path": ".github/", "required": false },
+    { "path": ".gitignore", "required": false },
+    { "path": ".gitattributes", "required": false },
+    { "path": ".gitmodules", "required": false },
+    { "path": ".mailmap", "required": false },
+    { "path": ".git-blame-ignore-revs", "required": false },
+    { "path": ".editorconfig", "required": false },
+    { "path": "AGENTS.md", "required": true, "note": "the sync writes it" },
+    { "path": "CLAUDE.md", "required": true, "note": "imports AGENTS.md" },
+    { "path": "README.md", "required": false },
+    { "path": "LICENSE", "required": false },
+    { "path": "LICENSE.*", "required": false },
+    { "path": "CHANGELOG.md", "required": false }
+  ],
+  "stacks": {
+    "dotnet": [
+      { "path": "eng/", "required": false, "note": "only where the org's build SDK builds the stack" },
+      { "path": "*.sln", "required": false },
+      { "path": "*.slnx", "required": false },
+      { "path": "*.csproj", "required": false, "note": "a project at the top without a solution" },
+      { "path": "*.fsproj", "required": false, "note": "a project at the top without a solution" },
+      { "path": "global.json", "required": false, "note": "toolchain pin" },
+      { "path": "Directory.Build.props", "required": true, "note": "wires the analyzer gates, from the playbook's dotnet template" },
+      { "path": "Directory.Build.targets", "required": true, "note": "wires the analyzer gates, from the playbook's dotnet template" },
+      { "path": "Directory.Packages.props", "required": false },
+      { "path": "CodeMetricsConfig.txt", "required": true, "note": "CA1502 threshold, from the playbook's dotnet template" },
+      { "path": ".editorconfig", "required": true, "note": "analyzer severities, from the playbook's dotnet template" },
+      { "path": "NuGet.config", "required": false },
+      { "path": "nuget.config", "required": false, "note": "second spelling of NuGet.config, the list is case-sensitive" },
+      { "path": "Config.props", "required": false, "note": "build settings the org's build SDK template puts at the top" },
+      { "path": "build.ps1", "required": false, "note": "build entry wrapper" },
+      { "path": "build.sh", "required": false, "note": "build entry wrapper" },
+      { "path": "build.cmd", "required": false, "note": "build entry wrapper" },
+      { "path": "Build.cmd", "required": false, "note": "build entry wrapper" },
+      { "path": "Restore.cmd", "required": false, "note": "restore entry wrapper" },
+      { "path": "restore.sh", "required": false, "note": "restore entry wrapper" },
+      { "path": "Test.cmd", "required": false, "note": "test entry wrapper" },
+      { "path": "test.sh", "required": false, "note": "test entry wrapper" }
+    ],
+    "powershell": [
+      { "path": "build.ps1", "required": true, "note": "orchestrates build, test, sign, publish" },
+      { "path": "CHANGELOG.md", "required": true, "note": "source of the module version" },
+      { "path": "PSScriptAnalyzerSettings.psd1", "required": true, "note": "analyzer settings, line limit" },
+      { "path": "RequiredModules.psd1", "required": false, "note": "tooling pins, from the playbook's powershell template" }
+    ],
+    "rust": [
+      { "path": "Cargo.toml", "required": true, "note": "root manifest with the release profile" },
+      { "path": "Cargo.lock", "required": true },
+      { "path": "rust-toolchain.toml", "required": true, "note": "toolchain pin" },
+      { "path": "deny.toml", "required": true, "note": "cargo deny check" },
+      { "path": "clippy.toml", "required": false, "note": "lint parameters only" }
+    ],
+    "typescript": [
+      { "path": "package.json", "required": true },
+      { "path": "pnpm-lock.yaml", "required": true },
+      { "path": "tsconfig.json", "required": true },
+      { "path": "tsconfig.base.json", "required": true },
+      { "path": "biome.json", "required": true },
+      { "path": ".prettierignore", "required": true }
+    ],
+    "javascript": [
+      { "path": "package.json", "required": true },
+      { "path": "pnpm-lock.yaml", "required": true },
+      { "path": "biome.json", "required": true },
+      { "path": ".prettierignore", "required": true }
+    ],
+    "autohotkey": [],
+    "java": [],
+    "python": [],
+    "ruby": [],
+    "go": [],
+    "cpp": [],
+    "other": []
+  }
+}

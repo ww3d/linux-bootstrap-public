@@ -1,0 +1,17 @@
+{
+  "kinds": {
+    "design": { "model": "opus", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
+    "research": { "model": "opus", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
+    "dev": { "model": "sonnet", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "review": { "model": "opus", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "controller": { "model": "opus", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" },
+    "orchestrator": { "model": "opus", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" }
+  },
+  "skills": {
+    "/ccweb-prompt": "design",
+    "/dev-task": "dev",
+    "/pr-poll-review": "review",
+    "/controller-mode": "controller"
+  },
+  "defaultKind": "dev"
+}

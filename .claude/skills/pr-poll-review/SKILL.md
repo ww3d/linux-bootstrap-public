@@ -1,40 +1,93 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und trennt Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidung noetig -> User stimmt ab, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt). Legt beides vor jeder Veroeffentlichung erst als lesbaren Chat-Report plus Widget zur Freigabe vor, postet dann den Review, wartet auf Pushes, reviewt neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert, wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "4.0.0"
+  version: "14.9.0"
   source: ww3d/playbook
+  checksum: "sha256:7adca2e006e0a79d1ecbed59982066e4ed55c8e3dee0ec8c11ecf84cff97162f"
+  # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
+  # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
+  # real measurement has run yet - an invented number would be the false green this gate is against.
+  measurement:
+    tokens:
+    model:
+    measured:
+    source: "not measured - no ANTHROPIC_API_KEY in the build environment of ww3d/playbook#210"
 ---
 
 # PR Review & Approve Workflow
 
 Iterativer Review-Loop fuer GitHub-PRs. Faehrt von Erstreview bis Approve durch und fuellt die
-`reviewer`-Rolle aus `AGENTS.md` § "PR Lifecycle" (Schritte 9-11). Der Merge (Schritt 12) bleibt
-beim `maintainer` — dieser Skill merged nie.
+`reviewer`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle" (Schritte 6-7). Der Merge und das
+Schliessen des Tracking Issues liegen bei dem, der merged (`.agents/rules/pr.md` § "Merge") — dieser
+Skill merged nie und endet mit dem Approve.
+
+## Wann
+
+Wenn ein PR zu reviewen ist, bis zum Approve: Kontext selbst am Head beschaffen, ein Review-Prompt
+existiert nicht (Phase 1, Schritt 1); klassifizieren und pruefen, jeden Punkt in Conventional
+Comments (Kernprinzip, Schritte 2-3); vor jeder Veroeffentlichung Chat-Report — im claude.ai-Chat
+plus Widget — zur Freigabe (Schritt 4); posten, auf Pushes warten, neu reviewen (Phasen 2-3);
+approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
 
 ## Kernprinzip
 
-- **Ziel:** Alle mit dem PR zusammenhaengenden Punkte werden im selben PR sauber gefixt und
-  geradegezogen — nicht nur das Angefasste, sondern auch verwandte Files, Configs und Tests
-  (beyond-the-diff).
+- **Session-Start-Pflicht:** Vor Phase 1 gilt `AGENTS.md` § "Session Start: Read Before Anything
+  Else" des Ziel-Repos — Pflichtkern (AGENTS-Kern, `CLAUDE.md`, Audit-Kopf) lesen und je Datei mit
+  Blob-SHA quittieren. Der Review laeuft am Head des Repos, nie aus dem Chat-Verlauf oder dem
+  Gedaechtnis.
+- **Einsatzpunkt-Quittung als Eingangsschritt.** Dieser Skill loest vier Trigger aus: er postet
+  einen Review, er beurteilt einen PR-Body, er prueft Traeger und er wiegt Belege. Vor Phase 1
+  werden darum `.agents/rules/review.md`, `.agents/rules/pr.md`, `.agents/rules/carrier.md` und
+  `.agents/rules/evidence.md` **vollstaendig gelesen und quittiert** — Format und Pflicht stehen in
+  `AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3, einmal je Session je Datei.
+  In ccweb erzwingt der `require-rule-read.sh`-Hook dasselbe; wo kein Hook laeuft, ist dieser
+  Schritt die einzige Absicherung. Die Regeltexte werden hier **nicht** gedoppelt, sondern gelesen.
+- **Dieselbe Quittung fuer die drei Referenzdateien.** `reference/checks.md`,
+  `reference/report.md` und `reference/gates.md` tragen die Kasuistik dieses Skills. Jede wird
+  an ihrer Einsatzstelle **vollstaendig gelesen und quittiert**, bevor der Schritt laeuft, der
+  sie braucht — nicht ueberflogen, einmal je Session je Datei, in der Zeilenform aus `AGENTS.md`
+  § "Session Start: Read Before Anything Else", Schritt 3 (die Referenzdatei mit ihrem Pfad).
+- **Freigabe-Standard und Out of Scope** stehen in `.agents/rules/review.md` § "Review Comments"
+  (freigeben, sobald der PR eindeutig verbessert; Out of Scope blockt nicht und wird gebaut, die
+  drei nicht baubaren Faelle nach `.agents/rules/carrier.md` § "Carrier Requirement").
+- **Beyond the diff bleibt Suchmethode, nicht Blocking-Grund.** Verwandte Files, Configs und Tests
+  werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht.
+- **Modell dieser Session und ihrer Sub-Agenten nach `.agents/rules/agents.md` § "Models"**, in jedem
+  Review-Modus (`.agents/rules/review.md` § "Review Comments").
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen
   suchen (Phase 1, Red-Flags).
-- **Zwei Punkte-Arten:** Jeder gesammelte Punkt ist entweder ein **Finding** (klarer Mangel mit
-  eindeutiger Korrektur — Bug, CI-Gaming, fehlender Test, God-Class; Interaktion: posten/streichen)
-  oder eine **offene Frage** (Entscheidung ohne eindeutig richtige Loesung, mehrere valide Wege, oder
-  abhaengig von Kontext/Praeferenz, den nur der User hat; Interaktion: der User stimmt ab). Im Zweifel
-  ist es eine offene Frage — praeskriptiv posten nur, wenn die Korrektur wirklich eindeutig ist.
-- **a/b/c bei offenen Fragen:** Jede offene Frage wird mit drei Perspektiven zur Auswahl aufbereitet:
-  **a) SOTA/modern** (der State-of-the-Art-Ansatz), **b) was andere / die Grossen machen** (verbreitete
-  Praxis grosser Projekte), **c) Empfehlung** (Claudes konkreter Rat fuer genau diesen PR) — **c) ist
-  vorbelegt**. Wo a) oder b) sich nicht sauber belegen laesst, den Slot weglassen statt raten. Findings
-  brauchen kein eigenes a/b/c — ihre Korrektur/Empfehlung steht im Finding-Text selbst.
-- **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der User die gesammelten Punkte gesehen und
-  freigegeben hat (Phase 1, Schritt 4).
+- **Conventional Comments sind das Vokabular.** Labels, Dekoration, Trennstrich ("wer antworten
+  muss") und Nit-Regeln stehen in `.agents/rules/review.md` § "Review Comments" und werden hier
+  nicht gedoppelt. Im Zweifel, ob eine Korrektur wirklich eindeutig ist, ist es eine `question:` —
+  praeskriptiv als `issue:` posten nur, wenn sie es ist.
+- **Ein `nitpick:` geht als `suggestion`-Codeblock** im `body` des Inline-Kommentars, mit `path` und
+  `line` (Postform: `reference/report.md` § "Suggested Change als Postform").
+- **Ein `issue:` traegt im geposteten Kommentar** die drei Zeilen Fehlerart, Suche (der Befehl,
+  woertlich) und Fundstellen, nicht nur im Bericht — der Dev wiederholt dieselbe Suche
+  (`reference/checks.md` § "Fehlerart je Befund").
+- **Jede `question: (blocking)` in der Form aus `reference/report.md` § "Stufe A —
+  Chat-Report" (Offene Fragen), die Empfehlung vorbelegt.** Die uebrigen Labels brauchen diese
+  Form nicht — ihre Korrektur steht im Text selbst.
+- **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
+  gesehen und freigegeben hat (Phase 1, Schritt 4); die saubere Runde braucht keine
+  (`.agents/rules/pr.md` § "Round Ledger"). Adressat ist der Mensch — oder im
+  Controller-Modus der Controller (`.agents/rules/pr.md` § "Controller Mode"): dann geht Stufe A
+  als Text-Datei an ihn, als Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic" — lokal
+  nennt die Nachricht den Pfad, im Web liegt die Datei auf dem Branch `review/<N>-report`
+  (`.agents/rules/pr.md` § "Branch Naming") und die Nachricht nennt ihren Pfad; die Freigabe kommt
+  als Text zurueck, und das Widget entfaellt. Faellt der Nachrichtenweg aus, gilt
+  `.agents/rules/pr.md` § "Session Traffic" (Delivery and Change of Owner).
+- **Review-Schleife im Controller-Modus** mit der Dev-Session, deren Namen der Start nennt
+  (`.agents/rules/pr.md` § "Session Traffic", Punkt 8): jede Runde findet alle Punkte, auch die
+  nicht blockierenden; nach dem Posten geht ohne Antwort `#N Review zu <sha> steht` an den Dev, und
+  auf sein `#N Head <sha> bereit` laeuft Phase 3 fuer das Delta.
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
+- **Doku-only-PR:** was als doku-only zaehlt und dass er kein Review-Gate braucht, steht in
+  `.agents/rules/docs.md` § "Documentation"; gruene Gates genuegen, der Review darf nachlaufen.
 
 ## Eingabe
 
@@ -50,307 +103,171 @@ Optional (nur fuer den Polling-Fallback relevant):
 - `max_iterations` — Review-Runden bevor abgebrochen wird (Default: 10).
 - `timeout_minutes` — Gesamttimeout (Default: 60).
 
+Werkzeuge: jeder GitHub-Zugriff steht hier als `gh api` (REST; Grund und Wahl des Wegs:
+`.agents/rules/pr.md` § "Forge Tooling"); die Namen des GitHub-MCP stehen daneben fuer Umgebungen ohne `gh`,
+etwa den claude.ai-Chat.
+
 ## Phase 1: Erstreview
 
-1. Diff holen via `pull_request_read` (method=`get_diff`); bestehende Threads via
-   `get_review_comments` lesen, um Doppel-Kommentare zu vermeiden.
+1. **Kontext selbst beschaffen — es gibt keinen Review-Prompt.** Der Review-Chat startet mit seiner
+   Startzeile (Tabelle in `controller-mode` § "Schritt 4: Steuern"); alles Weitere wird am Head
+   gelesen, nie aus dem Chat uebernommen. Zu holen, in dieser Reihenfolge:
+
+   - Diff via `gh api repos/<repo>/pulls/<n> -H "Accept: application/vnd.github.diff"` bzw.
+     `pull_request_read` (method=`get_diff`); bestehende Threads via
+     `gh api repos/<repo>/pulls/<n>/comments` bzw. `get_review_comments`, um Doppel-Kommentare zu
+     vermeiden.
+   - **Spec-Datei** `docs/tasks/<issue>-<slug>.md`, **Tracking Issue** und **Decision-Log** — je am
+     Head lesen (`gh api repos/<repo>/contents/<pfad>?ref=<sha>` bzw. `get_file_contents` am
+     Head-SHA), nicht dem PR-Body glauben. Der PR-Body verlinkt sie.
+   - **CI-Status** via `gh api repos/<repo>/commits/<sha>/check-runs` bzw. `get_check_runs`,
+     **Default-Branch** aus dem PR-Objekt.
+   - **Review-Modus** aus der Spec-Datei am Head, Zeile `Review-Mode: <mode>` (`hard vN` / `light` /
+     `soft`; die alte Form `Review-Modus:` gilt bis Playbook 26.0.0), nie aus dem PR-Body. Traegt
+     die Spec keine Zeile oder gibt es keine Spec, gilt kein Wellen-Bericht-Gate. Die Wellen werden
+     gegen den Baustein des Modus geprueft:
+     [`reference/review-modes.md`](reference/review-modes.md).
+   - **Konstellation am PR messen.** `gh api user --jq .login` bzw. `get_me` zuerst gegen das Konto
+     des menschlichen Inhabers des `maintainer`-Sitzes halten: ist es dieses Konto, wird auf diesem
+     Weg nichts gepostet (`.agents/rules/pr.md` § "Accounts per Seat"). Dann gegen den PR-Autor:
+     verschiedene Accounts → `APPROVE` erlaubt; gleicher Account → GitHub sperrt `APPROVE` am
+     eigenen PR, das Verdikt geht als `COMMENT` mit der Zeile `Review-Verdict: approve <head-sha>`
+     (`.agents/rules/review.md` § "Review Comments", Phase 4).
 
 2. **Scan & Classify.** Filelist + Diff-Groesse ueberblicken, Review-Tiefe festlegen: kleine
    Touch-PRs duerfen knapp bleiben, grosse/breite PRs bekommen die volle Tiefe.
-   - **Sub-Agent-Parallelisierung bei grossen/breiten PRs:** parallele Spezial-Passes starten
-     (Security, Quality+Reuse, Tests, Docs), jeder gegen die Kriterien aus Schritt 3 (Red-Flags,
-     Test-Evidence, Konsistenz). Als Coordinator: Findings deduplizieren, echte
-     Severity bewerten, false positives filtern, **einen** konsolidierten Punkte-Satz bilden.
-   - **Modellwahl pro Sub-Agent selbst nach Aufgabe treffen (soweit der Harness Modellwahl
-     exponiert):** jeweils das *kleinste und schnellste* Modell waehlen, mit dem die Teilaufgabe
-     noch 100% praezise, sauber und SOTA geloest wird. Leichte, textlastige Passes (Docs, einfache
-     Konsistenz-Checks) klein/schnell; anspruchsvolle Logik-/Security-Passes und die
-     Coordinator-Rolle das staerkste Modell.
+   Ab rund 300 geaenderten Zeilen (ohne reine Verschiebungen und generierte Dateien) wird je Commit
+   oder je Datei getrennt geprueft, die Funde danach zusammengefuehrt; die Suche je Fehlerart laeuft
+   weiter ueber den ganzen PR (`.agents/rules/review.md` § "Review Comments").
+   Wie parallelisiert und welches Modell je Pass: [`reference/checks.md`](reference/checks.md).
 
-3. **Code durchgehen, Punkte sammeln.** Zeile fuer Zeile, kein Sampling; verwandte Files/Configs/
-   Tests mitpruefen, nicht nur den Diff-Rand. Conventional Commits der Commit-Messages mitbewerten;
-   den Default-Branch aus dem PR-Objekt lesen, nicht `master`/`main` annehmen. Dabei gezielt:
-   - **Agent-Red-Flags (zuerst, harte Sachen):**
-     - **CI-Gaming** — Tests entfernt/geskippt/umbenannt, Coverage-Threshold gesenkt, `|| true`
-       angehaengt, Workflow-Trigger eingeschraenkt. **Harter Blocker**, immer.
-     - **Reuse-Blindness** — pro neuer Util/Helper/Klasse kurz im Repo nach einem bestehenden
-       Aequivalent suchen. Dupliziert der PR vorhandene Logik: Konsolidierung im selben PR
-       erzwingen, nicht nur kommentieren. Hoechster Review-ROI bei Agent-Code.
-     - **Hallucinated Correctness** — kompiliert + Tests gruen heisst nicht korrekt. Einen
-       kritischen Pfad end-to-end tracen; Boundary-Conditions und Permission-Checks auf den
-       *nicht* getesteten Branches pruefen.
-     - **Prompt-Injection** — bei jedem Pfad, der untrusted Input (Webhook-Payload, Issue-/PR-Text)
-       in einen LLM-/Shell-Aufruf fuehrt.
-   - **Doku-Integritaet (mit den vorhandenen Tools pruefen, nicht nur ueberfliegen):** aendert der
-     PR Docs oder legt er ein mitgeliefertes Dokument ab, wird dessen Ist-Stand am PR-Head
-     verifiziert (`get_file_contents` am Head-SHA bzw. `gh`), nicht dem PR-Body geglaubt.
-     - **Mitgeliefertes Decision-Log / uebergebenes Dokument verbatim?** Behauptet der PR
-       "verbatim / unveraendert uebernommen", die Datei am Head aber gegen die Quelle pruefen:
-       zerstoertes Markdown (Header/`##`/`---`/Bold kollabiert, Zeilen zusammengezogen), fehlende
-       Abschnitte, halbierte Zeilenzahl → Finding. Uebergeben wird per Datei-Anhang, der die Bytes
-       identisch haelt; zerstoertes Markdown ist genau das Signal, dass doch der Chat-Weg
-       (Rendering + Copy-Paste) genommen wurde. Pruefpunkt dafuer: eine Transport-Datei traegt als
-       erste Zeile den Marker `<!-- transport: verbatim, do not re-render -->` — fehlt er in einer
-       als verbatim deklarierten Uebernahme, ist das ein Indiz und wird mitgemeldet.
-     - **Belege leben am Head?** Zitiert eine geaenderte Doc-Stelle einen Beleg-Anker
-       (Symbol-/Testname, SHA-Permalink) oder einen
-       Marker (`[erfuellt]`/`[teilweise]`/`[geplant]`), stichprobenartig gegen den Head-Stand
-       gegenpruefen: verweist der Beleg auf in diesem PR geloeschten/umbenannten Code
-       (tote Belegstelle), oder widerspricht der Marker dem Gebauten → Finding. Besonders bei
-       Retire-/Umzugs-PRs und Soll/Ist-markierten Architektur-Docs.
-     - **`[erfuellt]`-Marker gegen Dateiliste.** Wird im Diff ein Marker von `[geplant]`/
-       `[teilweise]` auf `[erfuellt]` gezogen, gegen die Dateiliste des PRs halten: deckt die
-       Aussage eine Oberflaeche oder Komponente ab, zu der der Diff keine Datei enthaelt →
-       Finding, auch wenn der danebenstehende Beleg plausibel klingt.
-     - **`REQ`-Checkliste im PR-Body.** Enthaelt der PR-Body eine nummerierte `REQ-NN`-Tasklist
-       (aus einem `ccweb-prompt`-Handoff oder manuell uebernommen), auf Vorhandensein und interne
-       Konsistenz pruefen: lueckenlose Nummerierung, jeder Haken mit einem Beleg auf **stabilem
-       Anker** (Test-/`It`-Name, Funktions-/Symbolname, Variablenname, Kommentar-Ueberschrift oder
-       Permalink mit Commit-SHA — `AGENTS.md` § "Evidence Requirement"), jeder unchecked Punkt mit
-       `nicht geliefert: <Grund>`. Haken ohne Beleg, unchecked ohne Grund oder eine ganz fehlende
-       Liste bei einem Prompt, der eine Vorgabenliste enthielt → Finding. Ein Beleg, der nur aus
-       branch-relativem `file:line` besteht, ist ebenfalls ein Finding — die naechste Fix-Runde
-       verschiebt die Zeile. `file:line` innerhalb eines SHA-Permalinks ist in Ordnung.
-       **Der Auftragsprompt selbst ist kein Review-Input:** Referenz fuer die Richtigkeit bleiben
-       Decision-Log und Architektur-Doku, Referenz fuer die Vollstaendigkeit ist ausschliesslich
-       die `REQ`-Liste im PR-Body.
-     - **Wellen-Bericht (konditional).** Nur pruefen, wenn der PR-Body Review-Wellen behauptet oder
-       der Auftrag den Review-Modus `hard vN` trug (der Prompt reicht die Kennung in den PR-Body
-       durch). Dann gilt: je Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und Findings-Zahl
-       (auch `0`), letzte Welle sauber oder die Restpunkte nach Cap 4 benannt; fehlender oder
-       unplausibler Bericht → Finding. Traegt der PR `light` oder `soft` — oder gar keinen
-       Modus — und behauptet keine Wellen, ist ein fehlender Bericht **kein** Finding.
-   - **Test-Evidence:** jede nicht-triviale Logikaenderung braucht einen Test, der auf dem
-     Pre-Change-Verhalten fehlgeschlagen waere. Fehlt der: als Punkt aufnehmen — kann der Author
-     keinen schreiben, ist der Fix unvollstaendig.
-   - **Beleg-Pflicht:** behauptet der PR-Body "gebaut / gruen / schnell / verifiziert" ohne einen
-     stabilen Anker (Test-/Symbolname, SHA-Permalink) als Beleg — Finding; nacktes
-     branch-relatives `file:line` zaehlt nicht als Beleg. Was nicht real lief (Docker / CLI / CI /
-     Hardware fehlt) muss der Body als "nicht verifiziert" deklarieren, nicht beschoenigen;
-     "schnell" ohne Benchmark ist kein Beleg.
-   - **Klassengroesse:** neue oder gewachsene Klasse ueber 300 Zeilen oder mit mehr als ~15
-     Instanzfeldern / mehr als einer Verantwortlichkeit ohne Begruendung im PR-Body — Finding
-     (God-Class-Faenger; ein mechanischer Datei-Split zaehlt nicht als Loesung). Reine
-     Schema-/DTO-/Config-Klassen und stateless Helfer sind ausgenommen.
-   - **PR-Body-vs-Diff-Konsistenz:** auf Phantom Changes (Body behauptet Aenderungen, die nicht im
-     Diff sind), Scope-Understatement (Diff tut mehr als der Body sagt) und Placeholder-
-     Descriptions pruefen.
-   - **Backlog-Gegencheck (beide Richtungen).** Erledigt der PR einen Eintrag, der in
-     `backlog.md`, `roadmap.md` oder einem Issue als offen gefuehrt wird, **muss er ihn im selben
-     PR streichen** (durchstreichen, nicht loeschen) — sonst taucht er in der naechsten
-     Design-Runde wieder als offen auf und beschreibt womoeglich einen Stand, den es nicht mehr
-     gibt. Umgekehrt gilt die Zaehlregel oben: was der PR offen laesst, braucht einen Traeger. Bei
-     Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen — `architecture.md`,
-     `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel ("die Doku nachziehen")
-     laesst genau die Quelle durchfallen, die niemand im Kopf hat.
-   - **Mitgeliefertes Log gegen die Review-Runden gelesen?** Ein Decision-Log, das **in diesem PR
-     neu entsteht**, traegt dessen Endstand — die Review-Runden liegen nach seiner Niederschrift.
-     Pruefen: steht dort ein Punkt noch als ungetragen, der inzwischen einen Traeger hat?
-     Beschreibt es einen Scope, den der reale Diff nicht mehr hat? Dann fehlt der Abschnitt
-     `## Nachtraege aus den Review-Runden` am Ende des Files → Finding. **Das hebt den
-     Verbatim-Check oben nicht auf:** der uebergebene Entscheidungstext bleibt byte-identisch, der
-     Nachtrag steht abgesetzt darunter (`docs/decisions/README.md` § Immutabilitaet).
-   - **Zeigen die Belege auf den Stand, der gemergt wird?** Nach jedem Push und jedem Rebase
-     wandern sie mit. Beleg-Stand-Zeile, SHA-Permalinks **und jede Mengenangabe im Body** (Zeilen-,
-     Test-, Datei-, Funktionszahlen) gegen den aktuellen Head pruefen — was auf einen anderen Stand
-     zeigt, ist ein Finding. Mengenangaben sind Teil des Diffs, nicht der Vorgeschichte: die Regel
-     gilt nicht nur beim Schreiben einer Zahl, sondern **rueckwirkend bei jedem Commit, der eine
-     schon geschriebene Zahl bewegt**.
+3. **Code durchgehen, Punkte sammeln.** **Zuerst lesen und quittieren:**
+   [`reference/checks.md`](reference/checks.md) — der Pruefkatalog, nach dem gesucht wird,
+   und was pro Punkt festzulegen ist. **Mechanisch vorweg, in jeder Runde — Skript fahren:**
+   `pwsh scripts/common/find-moved-fixes.ps1 -Repo <repo> -Pr <n>` — jeder `moved-fix` ist ein
+   `issue: (blocking)` ohne Ermessen. Ohne Skript: jede waehrend des PRs neu in den Body des
+   Tracking Issues, in `roadmap.md` oder `backlog.md` gekommene Zeile von Hand gegen die Dateiliste
+   des Diffs halten (`reference/checks.md` § "Backlog-Gegencheck"). Dann: Zeile fuer Zeile, kein
+   Sampling; verwandte Files/Configs/Tests mitpruefen, nicht nur den Diff-Rand.
+   **Verhaltensaenderung ohne Doku-Delta** ist ein `issue: (blocking)` (`reference/checks.md`
+   § "Doku-Delta").
+   Conventional Commits der Commit-Messages mitbewerten; den Default-Branch aus dem PR-Objekt
+   lesen, nicht `master`/`main` annehmen.
 
-   **Beim Sammeln pro Punkt festlegen (fuer die Freigabe in Schritt 4):**
-   - **Art:** Finding oder offene Frage (Kernprinzip "Zwei Punkte-Arten"). Ein klarer Bug ohne
-     Ermessensspielraum ist ein Finding; wo mehrere Wege valide sind oder die Wahl an Kontext haengt,
-     den nur der User hat, ist es eine offene Frage — nicht praeskriptiv als Finding verkleiden. Zu den
-     offenen Fragen zaehlen **beide Quellen**: was der Autor im PR selbst offen gelassen hat
-     (Stufe-A-Autor-Kontext) **und** was Claude im Review als offen erkennt.
-   - **Zaehlregel fuer Autor-Punkte:** jeder abgesetzte Punkt (nummeriert oder als Bullet), den der
-     PR-Body offen laesst (Abschnitte "Offene Fragen", "Observations", "Bewusst nicht"), bekommt
-     **genau eine eigene F-Nummer**. Die Form ist nirgends vorgeschrieben — `AGENTS.md`
-     § "PR / MR Description" verlangt fuenf Ueberschriften, keine Listenform; eine Zaehlmenge, die
-     an der Nummerierung haengt, laesst sich durch Bullets umgehen. Kein Buendeln mehrerer Punkte
-     zu einer Frage, kein Weglassen mit der Begruendung "ausserhalb des Auftrags" oder "vom Autor
-     korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt, entscheidet der User, nicht der
-     Review**. Die Zahl der F-Nummern aus Autor-Quelle muss
-     der Zahl der Punkte im PR-Body entsprechen; die eigenen Funde zaehlen zusaetzlich. Behauptet
-     der Body, ein Punkt sei anderswo bereits getrackt (Issue, Roadmap-/Pool-Zeile, Backlog), wird
-     dieser **Traeger am Head verifiziert** wie jeder andere Beleg — traegt er den Punkt nicht, ist
-     das ein Finding.
-   - **Traeger-Pflicht — jeder Punkt, der offen bleibt.** Ein **Traeger** ist der Ort, an dem ein
-     zurueckgestellter Punkt so steht, dass man ihn wiederfindet (`AGENTS.md` § "Carrier
-     Requirement"). Gueltig sind **nur** drei Orte: offenes Issue · Zeile in
-     `roadmap.md`/`backlog.md` · Aussage in einer Architektur-/Baseline-Doku mit Marker
-     `[geplant]`/`[teilweise]`. **Nicht** gueltig: PR-Body, Review-Kommentar, Issue-Kommentar, Chat
-     — und **kein Decision-Log**: das ist das Protokoll eines Tages, gelesen fuers Warum, nie als
-     Liste des Offenen. Steht eine Auflage im Log, braucht sie zusaetzlich Issue oder Roadmap-Zeile.
-     Unmarkierte Prosa in einer Architektur-Doku zaehlt ebenfalls nicht — sie sagt nicht, dass
-     etwas offen ist. Pro offenem Punkt pruefen:
-     - **Existiert der Traeger und ist er offen?** Ein geschlossenes Issue ist kein Beleg, sondern
-       ein Finding — es sieht aus wie ein erledigter. Roadmap-/Backlog-Zeilen und Status-Marker
-       haben keinen Zustand; sie zaehlen, bis der Punkt durchgestrichen ist bzw. der Marker auf
-       `[erfuellt]` wechselt.
-     - **Traegt er wirklich diesen Punkt?** Am Head nachlesen, nie der Angabe im Body glauben.
-     - **Weitergabe an eine kuenftige Scheibe gilt erst, wenn sie am Ziel steht** — im Issue der
-       Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Der Satz im Absender-PR ist eine Notiz an
-       niemanden: der Empfaenger liest sein eigenes Issue, nicht fremde PR-Bodies. Gibt es das Ziel
-       noch nicht, gehoert der Punkt in den Backlog — nie an eine Scheibe, die niemand kennt.
-     - **Wer ihn anlegt:** der Autor, im selben PR, als Anweisung aus dem Review. Nur wenn der PR
-       keine dieser Dateien anfasst, legt der Reviewer das Issue selbst an.
-   - **a/b/c fuer offene Fragen:** zu jeder offenen Frage kurz a) SOTA/modern, b) was andere machen,
-     c) Empfehlung recherchieren/formulieren. Nicht spekulieren — laesst sich a) oder b) nicht sauber
-     belegen, den Slot weglassen statt raten. c) ist immer Claudes eigener, begruendeter Rat.
+4. **Freigabe-Gate (vor jeder Veroeffentlichung).** **Zuerst lesen und quittieren:**
+   [`reference/report.md`](reference/report.md) — Stufe A, Stufe B, die Widget-Befuellung, die
+   beiden Invarianten und die Zeilen-Datei der Runde. **Dann den Review-Head festhalten**, nach dem
+   Holen des Heads und vor Bericht und Freigabe-Bitte, mit einem eigenen Befehl — der Hook
+   `require-rule-read.sh` liest diese Zeile, genau in dieser Form (voller 40-stelliger SHA):
 
-4. **Freigabe-Gate (vor jeder Veroeffentlichung).** Zweistufig — erst lesbarer Chat-Report, dann
-   erst die Freigabe. Nie direkt in die Freigabe springen.
+   ```bash
+   echo "review-head | <owner>/<repo>#<n> | $(gh api repos/<owner>/<repo>/pulls/<n> --jq .head.sha)"
+   ```
 
-   **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
-   ausgeben:
-   **Der obere Teil ist neu und komplett in einfacher Alltagssprache (kein Fachjargon) — er soll den
-   ganzen PR abdecken, damit der Leser nicht mehr in den PR wechseln muss. Der technische
-   Detail-Report darunter bleibt unveraendert und ist nur fuer den Fall da, dass jemand reingehen
-   will.**
+   Ohne `gh`: den vollen Head-SHA aus `pull_request_read` (method=`get`) in derselben Zeilenform
+   ausgeben. Bewegt sich der Head, wird die Zeile neu ausgegeben. Posten soll nur die Session, die
+   die Freigabe empfangen hat; ein Sub-Agent bekommt sie nicht zu sehen. Dann: zweistufig — erst
+   lesbarer Chat-Report, dann erst die Freigabe. Nie direkt in die Freigabe springen. **Das Widget gibt es
+   nur im claude.ai-Chat mit dem Maintainer.** Dort wird die VORLAGE-Zone, die Stufe B 1:1
+   uebernimmt, aus dem Playbook geholt — ueber die Contents-API, nicht ueber eine Raw-URL (das Repo
+   ist privat):
+   `gh api repos/ww3d/playbook/contents/.claude/skills/pr-poll-review/reference/widget-reference.html -H "Accept: application/vnd.github.raw"`
+   (oder ohne den Header `--jq .content` und das Base64 dekodieren) bzw. `get_file_contents` (owner
+   `ww3d`, repo `playbook`, gleicher Pfad). In Claude Code gibt es
+   keinen Widget-Host und keine Datei im Consumer-Repo; dort traegt der Text-Pfad die Freigabe
+   allein. Im Controller-Modus ist der Controller der Adressat, ohne Widget (Kernprinzip
+   "Freigabe-Gate"). Gepostet wird erst nach der Freigabe des Adressaten — ausser in der
+   sauberen Runde, die keine braucht (`.agents/rules/pr.md` § "Round Ledger"); der Hook prueft
+   sie nicht, der Reviewer wartet auf sie und prueft ihren Absender (`.agents/rules/review.md`
+   § "Review Comments").
 
-   - **Mergebarkeit** (allererste Zeile) — die Ein-Blick-Antwort: kann der PR gemergt werden, und wenn
-     nicht, was steht im Weg. Faltet Verdikt, CI-Status, Merge-Konflikte und offene Findings/Fragen in
-     einen Satz, z.B. „Approvebar — blockt: nichts" oder „Blockt noch: CI laeuft, 1 Merge-Konflikt, 2
-     offene Blocker". Das ist die konsolidierte Kurzantwort; der ausfuehrliche Verdikt steht unten im
-     Detail-Teil.
-   - **Kurzfassung** — der ganze PR in 2-4 Saetzen Klartext: was macht der PR, ist er ok, gibt es etwas
-     zu tun.
-   - **Was der Autor entschieden hat** — die wichtigsten Design-/Umsetzungsentscheidungen des PRs,
-     einfach zusammengefasst (keine woertlichen Zitate, kein Jargon), 2-5 kurze Punkte. Gibt der PR
-     dazu wenig her, entsprechend kurz — nichts erfinden.
-   - **Changes-Tabelle** (optional, nur bei breiten PRs mit vielen Dateien) — verwandte Aenderungen zu
-     Zeilen **gruppiert** (nie file-by-file; eine Quelldatei + 20 Uebersetzungsdateien sind zwei
-     Zeilen), je Zeile eine Beschreibung in Alltagssprache. Bei kleinen/schmalen PRs entfaellt sie —
-     die Kurzfassung reicht dann.
-   - **Ablauf-Diagramm** (optional, nur wenn die Aenderung einen echten Fluss hat — API-Aufrufe,
-     Event-/Async-Flow, Zustandsuebergaenge) — ein kompaktes Mermaid-Sequenz- oder Flussdiagramm des
-     geaenderten Ablaufs (rendert in GitHub und vielen Chat-Clients; sonst bleibt der Mermaid-Block als
-     Rohtext lesbar). Kein Diagramm um des Diagramms willen — hat der PR keinen nennenswerten Fluss,
-     entfaellt es.
-   - **Offene Fragen** (nur wenn es welche gibt) — je Frage ein Satz Klartext, worum es geht, dann
-     a) SOTA/modern · b) was andere machen · c) Empfehlung; **c) ist vorbelegt**. Quelle: was der Autor
-     im PR offen liess + was Claude im Review sieht. Dieselben Fragen stehen zur Auswahl im Widget.
-     Gibt es keine, wird das gesagt.
+5. **Zeilen-Datei der Runde** schreiben und pruefen, bevor gepostet wird — wie sie zum PR kommt,
+   steht in `.agents/rules/pr.md` § "Round Ledger"; Ort, Status je Ausgang und Pruefung:
+   `reference/report.md` § "Zeilen-Datei der Runde".
 
-   ─── ab hier der bestehende Detail-Report, **unveraendert** (nur zum Reingehen); mit einer sichtbaren
-   Trennung davor ───
+6. **Review-Head pruefen**, direkt vor dem Posten: den Head erneut holen. Nur wenn er sich seit
+   Schritt 4 bewegt hat, kommt die Zeile neu, und der Post braucht eine neue Freigabe nach ihr. Der
+   Hook sperrt den Post ausserdem, solange `reference/checks.md` und `reference/gates.md` in dieser
+   Session nicht vollstaendig gelesen sind — der Read selbst zaehlt, die
+   Quittungszeile ist zweite Quelle.
 
-   - **Verdikt**, als erste Zeile des Detail-Teils: `Blockiert` / `Approvebar nach Fixes` / `Sauber` —
-     danach erst die Begruendung.
-   - **Severity-Counts als Kopfzeile** (z.B. `3 Blocker, 2 Major, 4 Minor`), damit der Aufwand ohne
-     Zaehlen sichtbar ist.
-   - eine **kurze Prosa-Zusammenfassung des Reviews — hart auf max. 3 Saetze**: was geprueft wurde und
-     der Gesamteindruck. **Keine Beleg-Aufzaehlung hier** — keine Anker-Listen, keine
-     Test-Namen, kein „ich habe X, Y, Z getraced". Belege gehoeren an das jeweilige Finding, nicht in
-     den Verdikt-Absatz. Wird der Absatz laenger als 3 Saetze oder zaehlt er Belege auf, ist er falsch.
-   - darunter eine **vollstaendige, nummerierte** Findings-Liste. Pro Punkt: Nummer, **Severity-Tag
-     `[Blocker]` / `[Major]` / `[Minor]`**, Datei/Zeile, ein Satz.
-   - **Vollstaendigkeit ist Pflicht:** alles ab `[Minor]` wird gemeldet — reine Stilnotizen zaehlen
-     nicht als Finding, in Schritt 2 aussortierte false positives bleiben draussen. Ordnung/
-     Priorisierung nach Severity ist erwuenscht, aber nichts wird weggelassen oder still gefiltert.
-   - **Coverage-Statement zum Schluss:** in einem Satz, was bewusst *nicht* geprueft wurde und warum
-     (`Nicht geprueft: X, weil Y.`); gibt es keine Luecke, wird auch das gesagt. Ein Review, das
-     seine Luecken verschweigt, liest sich vollstaendiger als es ist.
+7. **Review posten** via `gh api` auf den Reviews-Endpunkt bzw. `pull_request_review_write` (nur
+   freigegebene + custom Punkte + entschiedene Fragen):
+   - `event`: `REQUEST_CHANGES` wenn ein blockierender Punkt dabei ist, sonst `COMMENT` — ausser im
+     Fall "Approve mit offenen Vorschlaegen" unten. Ein Review
+     aus lauter Nits ist nie `REQUEST_CHANGES`. Bei gleichem Account immer `COMMENT`, mit
+     ausdruecklichem Blocking-Vermerk im Body — GitHub lehnt Request Changes am eigenen PR ab.
+   - **Approve mit offenen Vorschlaegen:** blockiert kein Punkt, traegt jeder aendernde einen
+     `suggestion`-Block und haelt das Hard-Gate aus Phase 4, geht `APPROVE` mit den Blocks als
+     Inline-Kommentaren in **einem** Review-Event, der Body mit der Zeile `Review-Verdict: approve
+     <head-sha>`; im Gleiches-Konto-Fall dasselbe als `COMMENT` (`.agents/rules/review.md`
+     § "Review Comments"). Das Einspielen danach kostet keine Runde; das Merge-Gate prueft es.
+   - Inline-Comments mit `path` + `line` bevorzugen, jeder mit dem Label als Prefix (`issue:
+     (blocking)` …); Body mit knapper, nach Blocking-Wirkung geordneter Zusammenfassung **plus
+     expliziter Aufforderung an den Author, nach dem Fix zurueckzumelden**.
+   - **Jeder `nitpick:` geht als Suggested Change**, und eine entschiedene offene Frage geht
+     als Anweisung an den Author statt als Frage. Beide Formen:
+     [`reference/report.md`](reference/report.md).
 
-   **Stufe B — Freigabe** (referenziert die Nummern aus Stufe A). Default: **alle Findings werden
-   gepostet**; der User streicht nur einzelne.
-
-   - **Immer:** eine Zeile unter der Liste — der User nennt die Finding-Nummern, die gestrichen
-     werden sollen, und fuer die offenen Fragen nur die, bei denen er von der vorbelegten Empfehlung
-     abweicht (`F2: b`, `F3: custom …`). Ohne Angaben gilt jede kurze Bestaetigung (`k`, `ok`, `los`,
-     `posten`, `machen`, `gut`) als „alle Findings posten, bei jeder Frage die Empfehlung". Custom-
-     Punkte im selben Zug. Der Pfad, der nie ausfaellt.
-   - **Zwei getrennte Ausstiege, beide ausdruecklich waehlbar** (sonst rutscht jeder Punkt in den
-     bequemeren): `F3: offen lassen` — nicht als Anweisung posten, **Traeger Pflicht**; oder
-     `F3: verwerfen` — der Punkt endet ersatzlos, kein Traeger, und wird im Review-Body einzeilig
-     als verworfen protokolliert, damit die Entscheidung nachvollziehbar bleibt. Fehlt die Angabe,
-     gilt „offen lassen"; „verwerfen" wird nie unterstellt.
-   - **Immer mitliefern:** ein Widget als Eingabehilfe — in jeder Runde, unabhaengig davon, ob ein
-     Visualizer verfuegbar ist (rendert es nicht, ist es folgenlos; siehe Invarianten). **Nur die
-     VORLAGE-Zone von `widget-reference.html` (neben dieser Datei) 1:1 uebernehmen** — das dort
-     markierte GERUEST (Dokumentrahmen, `:root`, `body`/`.wrap`, `.widget`-Container, `.out`) bleibt
-     draussen, es macht die Datei nur standalone lauffaehig. Masse, Farben (ueber Host-Variablen)
-     und Logik stehen in der Referenz und werden hier bewusst nicht gedoppelt, damit Referenz und
-     Spec nicht auseinanderlaufen. Zwei Injection-Points, beide aus dem Stufe-A-Report befuellen:
-     `FINDINGS` (die Findings) und `QUESTIONS` (die offenen Fragen; leer lassen, wenn es keine gibt —
-     dann entfaellt der Fragen-Bereich sichtbar). Was der Referenz-Code nicht selbst begruendet:
-     - Die rechte Spalte des Kopf-Grids bleibt leer — sie haelt die Mitte zentriert und die obere
-       rechte Ecke frei, wo Chat-Clients ihr eigenes Menue einblenden.
-     - Die Legende bleibt immer vollstaendig, auch fuer Stufen ohne Findings: sonst ist der neutrale
-       Badge nicht als „Minor" (statt „deaktiviert") erkennbar, und dass keine roten Badges
-       dastehen, ist selbst ein Signal.
-     - Die Severity der Findings ist im Widget **read-only** — sie ist die Aussage des Reviews und
-       nicht hier umzustellen (nur posten/streichen), sonst widerspraeche der Badge dem
-       Finding-Text und das Widget triebe von Stufe A weg. Frei waehlbare Prio gibt es nur bei den
-       eigenen Custom-Punkten, weil die dem User gehoeren.
-     - **Offene Fragen sind ein eigener, vom Findings-Block klar abgetrennter Bereich** mit anderer
-       Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — `a) SOTA`, `b) Grosse`,
-       `c) Empfehlung`, eine eigene (Custom-)Antwort, und darunter abgesetzt die beiden Ausstiege
-       `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem
-       Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt sie zu beantworten.
-       **c) ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
-       Default-Prinzip wie „alle Findings posten". Der a/b/c-Text ist read-only (die recherchierte
-       Aussage aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
-       `→ heisst:`-Klartext-Zeile (Feld `explain` je Frage), damit die Entscheidung ohne Jargon
-       verstaendlich ist — gleiche Aussage wie in Stufe A.
-
-   Zwei Invarianten:
-   - Das Widget **ersetzt** die Textaufforderung nie — es wird zwar immer mitgeliefert, aber die
-     Visualizer-Verfuegbarkeit ist vorab nicht pruefbar (derselbe Client rendert je nach Plattform
-     oder nicht). Rendert es nicht, ist das folgenlos, und der Text-Pfad traegt die Freigabe allein.
-   - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
-     andere Inhalte als der Report aus Stufe A — gleiche Findings-Nummern, gleiche Severity, gleiche
-     Fragen (`F1`, `F2`, …) mit denselben a/b/c-Optionen und derselben Vorbelegung, nur kuerzer. Was
-     nur im Widget stuende, waere fuer jeden verloren, bei dem es nicht rendert.
-
-   `ask_user_input_v0` wird hier nicht benutzt: `multi_select` laesst sich nicht leer absenden,
-   `single_select` sendet beim ersten Klick ab, beide deckeln bei 4 Optionen.
-   - Erst nach Freigabe durch den User posten.
-
-5. **Review posten** via `pull_request_review_write` (nur freigegebene + custom Punkte + entschiedene
-   Fragen):
-   - `event`: `REQUEST_CHANGES` wenn ein Blocker dabei ist, sonst `COMMENT`.
-   - Inline-Comments mit `path` + `line` bevorzugen, jeder mit Severity-Prefix; Body mit knapper,
-     nach Severity geordneter Zusammenfassung **plus expliziter Aufforderung an den Author, nach
-     dem Fix zurueckzumelden**. Suggested-Code-Changes auf Englisch.
-   - **Entschiedene offene Fragen** werden als konkrete Anweisung an den Author gepostet — der vom
-     User gewaehlte Ansatz (a/b/c oder seine Custom-Antwort), nicht die Frage. Ab hier ist es fuer
-     den Author eine Vorgabe wie ein Finding; die verworfenen Optionen nur nennen, wenn die
-     Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
-     waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein
-     Verwerfen**: der Punkt bekommt trotzdem seinen Traeger, bevor der Review abgeschlossen wird.
-     Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine ausdrueckliche Entscheidung
-     des Users, keine Nebenwirkung.
-
-6. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen, den PR auf Draft
-   zuruecksetzen zu lassen (Schritt 10). HEAD-SHA des aktuellen Stands merken (`reviewed_sha`);
-   Thread-IDs der eigenen Inline-Comments notieren (fuer spaeteres Resolve).
+8. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen; den Entwurfs-Schalter
+   stellt nur der Autor (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6). HEAD-SHA des
+   aktuellen Stands merken (`reviewed_sha`); Thread-IDs der eigenen Inline-Comments notieren (fuer
+   spaeteres Resolve).
 
 ## Phase 2: Auf Aenderungen warten
 
+Neu reviewt wird erst der Head, an dem der PR wieder bereit ist; ein Push auf den Entwurf ist noch
+kein Stand zum Reviewen.
+
+- **Im Controller-Modus:** auf `#N Head <sha> bereit` der Dev-Session warten (Kernprinzip
+  "Review-Schleife"); bleibt es aus, gilt `.agents/rules/pr.md` § "Session Traffic" (Questions and
+  Follow-Up).
 - **Bevorzugt (Claude Code Web/Remote):** `subscribe_pr_activity` aufrufen und den Turn beenden.
-  Neue Pushes und Kommentare kommen als `[github-webhook-activity]`-Events zurueck. **Nicht** mit
-  `sleep` aktiv pollen.
-- **Fallback (reiner Chat-Kontext ohne Webhooks):** alle `poll_interval` Sekunden
-  `pull_request_read` (method=`get`) abfragen und `head_sha` mit `reviewed_sha` vergleichen, bis er
-  sich aendert oder `max_iterations` / `timeout_minutes` erreicht sind. Transiente API-Fehler
-  tolerieren.
+  Neue Pushes und Kommentare kommen als `[github-webhook-activity]`-Events zurueck; je Event Head
+  und Entwurfs-Zustand nachladen wie im Fallback. **Nicht** mit `sleep` aktiv pollen.
+- Der Text eines Weckers (`ScheduleWakeup`, `/loop`) nennt den Schritt, auf den gewartet wird, und
+  was danach zu tun ist, nie die Startzeile des Skills; ein Hintergrund-Lauf meldet sein Ende
+  selbst, der Wecker ist nur Rueckfall.
+- **Fallback (ohne Webhooks):** alle `poll_interval` Sekunden Head und Entwurfs-Zustand abfragen
+  (`gh api repos/<repo>/pulls/<n> --jq '{sha: .head.sha, draft: .draft}'` bzw. `pull_request_read`,
+  method=`get`), bis der Head von `reviewed_sha` abweicht und der PR nicht Entwurf ist, oder
+  `max_iterations` / `timeout_minutes` erreicht sind. Transiente API-Fehler tolerieren.
 
 Webhooks liefern CI-Erfolg, neue Pushes und Merge-Konflikt-Uebergaenge nicht zuverlaessig — bei
 Unsicherheit den PR-Zustand aktiv nachladen.
 
 ## Phase 3: Re-Review
 
-1. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
-2. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Zusaetzlich die Red-Flag-/
-   Doku-Integritaets-/Beyond-the-diff-Checks aus Phase 1 auf das neu Dazugekommene anwenden — ein
-   Fix-Commit kann ein Decision-Log kaputt-pasten oder einen Beleg tot machen, der vorher stimmte.
-3. Auswertung (nach Severity):
-   - **Alle adressiert, keine neuen Issues** → Phase 4.
-   - **Rest- oder Neu-Issues** → sammeln → **Freigabe-Gate (Phase 1, Schritt 4)** → posten →
-     **die in dieser Runde adressierten Threads sofort resolven** (`resolve_thread`) →
-     `reviewed_sha` aktualisieren, zurueck zu Phase 2.
+1. **Erst den Beweis pruefen**, im Checkout nach `git fetch origin <default-branch> <head-branch>`
+   (das Skript braucht `reviewed_sha`, den neuen Head und den Basis-Head):
+   `pwsh scripts/common/test-pure-catch-up.ps1 -Reviewed <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`;
+   kam das Verdikt mit offenen Vorschlaegen, stattdessen
+   `pwsh scripts/common/test-applied-suggestions.ps1 -Repo <repo> -Pr <n> -Verdict <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`,
+   das den Nachzug mit prueft; Reviews des PR-Autors zaehlen dort nie, im Gleiches-Konto-Fall fuehrt
+   den Beweis darum das Merge-Gate (`test-merge-ready.ps1 -Repo <repo> -Pr <n> -SameAccount`,
+   Pruefung `review-verdict`). `PURE` bzw. `PROVEN` heisst, seit `reviewed_sha` kam nur
+   nachgezogener Basis-Branch, Zeilen-Dateien und — bei `PROVEN` — woertlich eingespielte Vorschlaege
+   dieses Reviews dazu: keine neue Runde, ein Approve oder eine Zeile `Review-Verdict: approve <sha>`
+   bleibt stehen, das Merge-Gate prueft den Beweis selbst (`.agents/rules/review.md` § "Review
+   Comments"). Hatte die Runde davor noch blockierende Punkte, steht nichts, das bleiben koennte:
+   dann weiter mit Schritt 2. Ebenso bei `NOT PURE`, `NOT PROVEN` und ohne Checkout oder pwsh.
+2. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
+3. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Fuer jedes fruehere
+   `issue:` dieselbe Suche wie im Bericht am neuen Head wiederholen; der Fix gilt erst, wenn sie
+   keine Fundstelle der Fehlerart mehr findet (`reference/checks.md` § "Fehlerart je Befund").
+   Zusaetzlich die Red-Flag-/Doku-Integritaets-/Doku-Delta-/Beyond-the-diff-Checks aus Phase 1 auf
+   das neu Dazugekommene anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen
+   Beleg tot machen, der vorher stimmte.
+4. Auswertung (nach Blocking-Wirkung):
+   - **Alle blockierenden adressiert, keine neuen** → Phase 4. Nicht blockierende Punkte mit
+     `suggestion`-Block halten das Approve nicht auf, auch im Controller-Modus: sie gehen mit ihm
+     (Phase 1, Schritt 7), der Autor spielt sie danach woertlich oder gar nicht ein
+     (`.agents/rules/pr.md` § "Controller Mode"). Ein aendernder Punkt ohne Block haelt es auf.
+   - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Head (Phase 1,
+     Schritte 4-6)** → posten → **die in dieser Runde adressierten Threads sofort resolven**
+     (`resolve_thread` mit `threadId=PRRT_...`; mit `gh` die Mutation `resolveReviewThread` per
+     `gh api graphql` — warum, steht in `.agents/rules/pr.md` § "Forge Tooling") → `reviewed_sha`
+     aktualisieren, zurueck zu Phase 2.
 
 **Resolven passiert in jeder Runde, nicht erst am Ende** — wer bis Phase 4 wartet, laesst den Author
 raten, was schon erledigt ist, und haengt die Restpunkte in einer Wand alter Threads.
@@ -360,66 +277,94 @@ raten, was schon erledigt ist, und haengt die Restpunkte in einer Wand alter Thr
 [HARD-GATE]
 Vor jedem **positiven Abschluss-Verdikt**, ausnahmslos — jeder Punkt muss erfuellt sein.
 
-**Positives Abschluss-Verdikt** heisst: jede Aussage, die den PR als fertig, sauber, passend,
-approve-faehig oder mergebar bezeichnet — auch relativiert („aus meiner Sicht", „im Grunde", „bis
-auf Kleinigkeiten"). **Kanal egal:** `APPROVE`-Event, `COMMENT`-Review, Issue-Kommentar, Satz im
-Chat sagen dem `maintainer` alle „du kannst mergen" und binden dieses Gate, auch wo GitHub keins
-zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischenverdikte `Blockiert` /
-`Approvebar nach Fixes` — dort sind die Threads der Grund.
+**Zuerst lesen und quittieren:** [`reference/gates.md`](reference/gates.md) — was ein
+positives Abschluss-Verdikt ueberhaupt ist, die Kasuistik zu den Punkten 4, 5 und 7, die
+STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 
-1. CI gruen — `pull_request_read` method=`get_check_runs`.
+1. **Laufzeile statt CI-Status.** CI zaehlt als tot (`.agents/rules/pr.md` § "CI Counts as Dead
+   Org-Wide"); es zaehlt die Laufzeile unter "How tested", die `.agents/rules/pr.md` § "Test Runs"
+   fuer diesen Diff verlangt — dort auch die Faelle ohne vollen Lauf oder ohne Laufzeile. Fehlt die
+   verlangte Zeile, **nicht** approven. Was der Reviewer selbst faehrt, steht ebenda; er nennt seine
+   gefilterten Tests und Mutationsproben im Review-Body.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
-   Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — kein Blocker.)
+   Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf;
+   ebenso `behind`: ein reiner Nachzug danach kostet keine Runde, Phase 3 Schritt 1.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**
    approven, unabhaengig vom CI-Signal.
-4. **Eigene Threads leer — Vorbedingung des Schreibens, keine Nachpruefung.** Erst resolven, dann
-   schreiben: `get_review_comments` frisch abrufen, die **selbst eroeffneten** Threads durchzaehlen,
-   jeden am Head adressierten Punkt jetzt `resolve_thread` (`threadId=PRRT_...`). Das Verdikt zu
-   formulieren, bevor die Zaehlung **null offene eigene Threads** ergibt, ist selbst schon der
-   Verstoss — nicht erst das Absenden. Ist ein Thread offen und sein Punkt *nicht* adressiert →
-   zurueck in den Loop. Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt
-   benannt.
-5. PR-Body woertlich nach `Closes #` / `Fixes #` / `Resolves #` durchsuchen. Fehlt es — **nicht**
-   approven (blocken, oder nach dem Merge manuell schliessen).
+4. **Eigene Threads nach Blocking-Wirkung — Vorbedingung des Schreibens, keine Nachpruefung.** Erst
+   resolven, dann schreiben: die Review-Kommentare frisch abrufen (`get_review_comments` bzw.
+   `gh api`), die **selbst eroeffneten** Threads durchgehen, jeden am Head adressierten Punkt jetzt
+   resolven. Wie im Einzelfall gerechnet wird: `reference/gates.md`.
+5. **Anker-Issue, Auto-Close-Zeile und Tracking Issue — eine Pruefung, am Head.**
+   - **Nennt der Body sein Anker-Issue ueberhaupt — mit `Closes` oder mit `Refs`?** Fehlt beides,
+     ist das ein eigener `issue: (blocking)` (`.agents/rules/pr.md` § "PR / MR Description") —
+     ausser beim PR aus Auftragstext ohne Issue, der sein eigener Anker ist (`.agents/rules/pr.md`
+     § "Task Spec").
+   - **Auto-Close-Zeile:** geprueft wird die **Zeile**, nicht das Vorkommen — eine eigene Zeile,
+     Schliess-Keyword am Zeilenanfang, mit Nummer. Fehlt sie, wo das Ziel keinen offenen Punkt
+     mehr hat — **nicht** approven (blocken, oder vom Merger per Skript schliessen lassen).
+   - **Existiert das Tracking Issue des Designs und ist es offen?** · **Stehen die in diesem PR
+     zurueckgestellten Punkte in seinem Body — und ist keiner davon ein verschobener Fix
+     (`find-moved-fixes.ps1` am Head: null `moved-fix`)?** · **Zeigt eine Auto-Close-Zeile auf ein
+     Issue mit Checkliste, waehrend in dessen ganzem Body noch ein offener Punkt steht?** Gerechnet
+     wird gegen die Zeile, nie gegen ein Vorkommen im Fliesstext.
+   - **Ergebnis muss null ungetragene Punkte sein** — sonst **nicht approven**. Keywords, Ausnahme
+     fuer ein Issue mit offener Checkliste, was als zurueckgestellt zaehlt, und die vierte Frage:
+     `reference/gates.md`.
 6. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
-7. Beleg-Pflicht — behauptet der PR-Body Erfuellung ("gebaut / gruen / verifiziert / schnell")
-   ohne stabilen Anker (Test-/`It`-Name, Funktions-/Symbolname, Variablenname,
-   Kommentar-Ueberschrift oder SHA-Permalink), **nicht** approven (blockt, analog zum
-   `Closes #`-Check aus Punkt 5). Ein Beleg, der nur aus branch-relativem `file:line` besteht,
-   erfuellt die Pflicht nicht — die Zeile wandert mit dem naechsten Push; als Teil eines
-   SHA-Permalinks ist sie in Ordnung. Was nicht real lief, muss als "nicht verifiziert" dastehen.
-8. **Traeger-Gate — nachgezaehlt, nicht erinnert.** Die zu zaehlende Menge ist fest: jeder
-   **abgesetzte** Punkt (nummeriert oder als Bullet) aus den PR-Body-Abschnitten „Offene Fragen" /
-   „Observations" / „Bewusst nicht", **plus** jede eigene F-Nummer, die der User auf „offen lassen"
-   gesetzt hat. Ausdruecklich verworfene Punkte zaehlen nicht mit. Zu jedem verbleibenden Punkt am
-   Head die Traeger-Referenz nachlesen (Liste in Phase 1, Schritt 3) und pruefen, dass sie ihn
-   wirklich traegt und offen ist.
-   **Ergebnis muss null traegerlose Punkte sein** — sonst **nicht approven**, dieselbe Haerte wie
-   der `Closes #`-Check aus Punkt 5.
+7. Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
+   (Testlauf, Benchmark, "verifiziert") ohne stabilen Anker, **nicht** approven (blockt,
+   analog zum Auto-Close-Zeilen-Check aus Punkt 5). Welcher Anker zaehlt: `reference/gates.md`.
 [/HARD-GATE]
 
-Diese Gedanken bedeuten STOP — du rationalisierst:
+Wenn sauber (keine neuen Punkte), ohne Freigabe (`.agents/rules/pr.md` § "Round Ledger"); vor
+jedem Post laeuft der Review-Head (Phase 1, Schritt 6), die eigenen Threads sind hier bereits
+aufgeloest (Punkt 4), fremde bleiben unberuehrt:
 
-| Gedanke | Realitaet |
-|---|---|
-| "Key-Files reichen, der Rest ist Boilerplate" | Zeile fuer Zeile, kein Sampling. |
-| "Sieht fertig aus, Closes-Check kann ich sparen" | Erst Punkt 5, dann Urteil. |
-| "Spec passt schon, muss den Diff nicht gegenpruefen" | Spec-Verdikt ist eigenstaendig. |
-| "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
-| "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — `get_review_comments`, Ergebnis null. |
-| "Die Zaehlung lief, aber ein offener Thread haelt das Fazit nicht auf" | Genau das haelt es auf — erst resolven, dann schreiben (Punkt 4). |
-| "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Traeger-Gate, Punkt 8. |
-| "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |
+- **Im Controller-Modus** sofort `APPROVE` (Lifecycle-Schritt 7), ohne Zusatzrunde. Der Body
+  traegt Kurzfassung, Laeufe, die Zeilen-Datei als `jsonl`-Block mit Dateinamen und die eigene
+  Zeile `Review-Verdict: approve <head-sha>` — Pflicht: der Ruleset verwirft das Approve, sobald
+  die Zeilen-Datei gepusht wird, die Zeile im Body bleibt, und das Merge-Gate liest sie. Die
+  Zeilen-Datei pusht der Controller allein und direkt vor dem Merge. Danach `#N approved <sha>`
+  ohne Antwort an den Controller, als Abgabe.
+- **Ohne Controller** zuerst Report und Zeilen-Datei als Kommentar-Review; hat der Dev die
+  Zeilen-Datei committet, laeuft der Skill am neuen Head erneut, und das `APPROVE` mit knappem
+  Body braucht keine neue Freigabe, solange der Head gegenueber dem geprueften nur die Zeilen-Datei
+  hinzufuegt oder bewiesen nur nachzieht (Phase 3, Schritt 1) — sonst Report und Freigabe neu.
+  Auch dieses Approve traegt die Zeile `Review-Verdict: approve <head-sha>`
+  (`.agents/rules/review.md` § "Review Comments").
 
-Wenn sauber: `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11) — die
-eigenen Threads sind hier bereits aufgeloest (Punkt 4), fremde bleiben unberuehrt; bei einem
-self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT`. Den Nutzer informieren: "PR #N
-abgeschlossen. Merge **nicht** ausgefuehrt — der `maintainer` merged."
+- **Mit offenen Vorschlaegen:** bleiben nur nicht blockierende Punkte, jeder aendernde mit
+  `suggestion`-Block, ist die Runde nicht sauber, endet aber positiv: Freigabe, Zeilen-Datei und
+  Review-Head wie Phase 1, Schritte 4-6, dann das Approve mit den Blocks in einem Review-Event
+  (Phase 1, Schritt 7). Der Body nennt je Vorschlag `beruehrt Code: ja/nein`
+  (`reference/report.md` § "Suggested Change als Postform"); im Controller-Modus folgt
+  `#N approved <sha>` wie oben.
+
+Eine Runde mit blockierenden Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
+self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit der eigenen Zeile
+`Review-Verdict: approve <head-sha>`, die das Merge-Gate liest (die alte Form `Review-Verdikt:`
+liest es bis Playbook 26.0.0). Lag der Bericht im Web auf `review/<N>-report`, loescht der
+Reviewer diesen Branch nach dem Approve
+(`gh api -X DELETE repos/<repo>/git/refs/heads/review/<N>-report`).
+
+**Ohne Controller** setzt der Skill mit dem Approve bzw. der Verdikt-Zeile das Tracking Issue auf
+`state:gate` und nimmt `state:review` ab (`.agents/rules/pr.md` § "State Labels";
+`gh api repos/<repo>/issues/<N>/labels -f "labels[]=state:gate"`,
+`gh api -X DELETE repos/<repo>/issues/<N>/labels/state:review`; Connector: erst die Labels lesen,
+dann mit `issue_write` die volle Liste schicken, denn `issue_write` ersetzt sie — `controller-mode`
+Schritt 4); im Controller-Modus setzt es der Controller.
+
+Den Nutzer informieren, die Nummer als Link: "owner/repo#N (Titel) abgeschlossen. Merge **nicht**
+ausgefuehrt — wer merged, faehrt vorher `scripts/common/test-merge-ready.ps1` und schliesst danach
+das Tracking Issue mit `scripts/common/close-tracking-issue.ps1` (`.agents/rules/pr.md` § "Merge")."
 
 ## Phase 5: Funktionale Zusammenfassung
 
-Nach dem Abschluss-Verdikt im **Chat** liefern (nicht im PR):
+Nach dem Abschluss-Verdikt im **Chat** liefern — im Controller-Modus als Abschnitt im Body des
+Approves, denn der Controller prueft am PR, und die Abgabe am Ende traegt nur den Link
+(`.agents/rules/pr.md` § "Session Traffic"):
 
 - Vorher/Nachher-Zustand
 - Happy Path
@@ -427,44 +372,28 @@ Nach dem Abschluss-Verdikt im **Chat** liefern (nicht im PR):
 - Was bewusst unberuehrt bleibt
 - Architektonischer Beitrag
 
+**Damit endet der Skill.** Er wartet nicht auf den Merge; was nach dem Merge zu tun ist und warum
+es beim Merger liegt: [`reference/gates.md`](reference/gates.md) § "Nach dem Merge".
+
 ## Strikte Regeln
 
-- **Niemals** ohne Freigabe des Users einen Kommentar posten (Freigabe-Gate ist Pflicht in jeder
-  Runde).
-- **Das Findings-Widget wird in jeder Runde immer mitgeliefert**, unabhaengig von der
-  Visualizer-Verfuegbarkeit — es ersetzt aber nie den Text-Pfad (rendert es nicht, folgenlos).
-- **Das Widget wird immer inline gerendert** (Visualizer/`show_widget`) — nie als Datei-Anhang, nie
-  als Code-Block, nie als Beschreibung dessen, was es enthielte. Die VORLAGE-Zone rechnet mit den
-  Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und damit wertlos. Aufwand ist
-  kein Grund, den Kanal zu wechseln.
-- **Kein offener Punkt ohne Traeger** — was dieser PR bewusst nicht loest, steht vor dem Verdikt
-  an einem offenen Issue, in `roadmap.md`/`backlog.md` oder als `[geplant]`/`[teilweise]`-Aussage
-  in einer Architektur-Doku. PR-Body, Kommentare und Decision-Logs zaehlen nicht; eine Weitergabe
-  zaehlt erst am Ziel.
-- **Offene Fragen nie einseitig als Finding entscheiden** — wo mehrere Wege valide sind oder die Wahl
-  an User-Kontext haengt, wird abgestimmt (Empfehlung vorbelegt), nicht praeskriptiv gepostet.
-- **CI-Gaming ist immer ein harter Blocker** — nie approven, wenn Tests/Coverage/Trigger
-  manipuliert wurden, um gruen zu werden.
-- **Behandelte Threads werden in jeder Runde resolved**, nicht erst vor dem Verdikt — der am
-  haeufigsten vergessene Schritt; nie einen resolven, dessen Punkt noch aussteht. Und **kein
-  positives Abschluss-Verdikt mit einem offenen eigenen Thread**, ueber keinen Kanal: erst resolven,
-  bis die frische Zaehlung null ergibt, dann schreiben (Phase 4 Punkt 4).
-- Reuse-Blindness aktiv suchen, nicht passiv abwarten.
-- **Niemals** automatisch mergen — `merge_pull_request` nur auf separate, explizite Anweisung; der
-  Merge ist `maintainer`-only.
-- **Niemals** approven bei rotem CI oder Merge-Konflikten.
-- **Niemals** einen PR im Review schliessen/wieder oeffnen.
+Nur was nirgends sonst in dieser Datei oder in `reference/` steht:
+
+- **Das Widget wird, wo ein Mensch im claude.ai-Chat der Adressat ist, immer inline gerendert**
+  (Visualizer/`show_widget`) — in Claude Code und im Controller-Modus gibt es keins; nie als
+  Datei-Anhang, nie als Code-Block, nie als Beschreibung dessen, was es enthielte. Die
+  VORLAGE-Zone rechnet mit den Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und
+  damit wertlos. Aufwand ist kein Grund, den Kanal zu wechseln.
+- **Nie einen Thread resolven, dessen Punkt noch aussteht.**
+- Rotationsmarke des Reviews: Art review in `.agents/session-kinds.json`; Uebergabe als PR-Kommentar nach `.agents/rules/pr.md` § "Controller Sessions".
+- **Niemals** einen PR im Review schliessen/wieder oeffnen. Dieser Skill merged nie — wer merged,
+  regeln `.agents/rules/pr.md` § "PR Lifecycle" und § "Controller Mode".
 - Bei Force-Push oder Branch-Reset: Loop pausieren, beim Nutzer nachfragen.
-- Jeden Review-Kommentar auf beiden Seiten spiegeln (lokaler Chat + GitHub-Thread), auch
-  Acknowledgements (`AGENTS.md` § "Mirroring GitHub Conversations").
-- Inline-Comments mit `path` + `line` bevorzugen; Suggested-Code-Changes auf Englisch.
+- Spiegeln von Antworten zwischen Chat und GitHub-Thread: `.agents/rules/pr.md` § "Mirroring GitHub
+  Conversations".
 
 ## Repo-Konventionen
 
-- Conventional Commits beim Bewerten der Commit-Messages erwarten.
-- Default-Branch aus dem PR-Objekt lesen.
-- `git` + `gh` sind Default fuer alle GitHub-Operationen (`AGENTS.md` § "Forge Tooling"); das
-  GitHub MCP nur als Fallback, wenn `gh` etwas nicht sauber kann, oder fuer MCP-only-Tools.
 - Falls via MCP gereviewt wird: Inline-Comments in drei Schritten — `create` (pending) →
   `add_comment_to_pending_review` → `submit_pending` (`event: COMMENT`/`REQUEST_CHANGES`); sonst
   scheitert der Inline-Review still. Bei `gh` entfaellt das.

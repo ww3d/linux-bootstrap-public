@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ledger.schema.json",
+  "title": "Round ledger line",
+  "description": "One point of a design or review round: one JSON object per line of docs/decisions/<stamp>-<slug>-ledger.jsonl. A line is written in the English form (statement, reason, source, ...; status accepted, rejected, ...). The old German form (satz, grund, quelle, ...; status angenommen, verworfen, ...) is read until playbook 26.0.0 (ww3d/playbook#356); a line is wholly one form or the other, never a mix.",
+  "oneOf": [{ "$ref": "#/definitions/english" }, { "$ref": "#/definitions/german" }],
+  "definitions": {
+    "english": {
+      "type": "object",
+      "required": ["id", "status", "statement", "reason", "source"],
+      "additionalProperties": false,
+      "if": { "properties": { "status": { "const": "rejected" } }, "required": ["status"] },
+      "then": {
+        "required": ["reopen_only_with"],
+        "properties": { "reopen_only_with": { "minLength": 1 } }
+      },
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Point number, unique within its file." },
+        "status": {
+          "enum": ["accepted", "rejected", "deferred", "superseded", "idea"],
+          "description": "Outcome of the point."
+        },
+        "statement": { "type": "string", "minLength": 1, "description": "The point in one sentence." },
+        "reason": { "type": "string", "minLength": 1, "description": "Why it got this status." },
+        "source": { "type": "string", "minLength": 1, "description": "Where the point or its decision stands." },
+        "topic": { "type": "string", "description": "Topic the point belongs to." },
+        "reopen_only_with": { "type": "string", "description": "The new argument that reopens a rejected point; required, and not empty, when the status is rejected." },
+        "already_at": { "type": "string", "description": "Where the point already stands." },
+        "depends_on": { "type": "string", "description": "Id of the point this one depends on." },
+        "priority": { "type": ["string", "integer"], "description": "Priority, free-form string or number." }
+      }
+    },
+    "german": {
+      "description": "Old German form, read until playbook 26.0.0 (ww3d/playbook#356).",
+      "type": "object",
+      "required": ["id", "status", "satz", "grund", "quelle"],
+      "additionalProperties": false,
+      "if": { "properties": { "status": { "const": "verworfen" } }, "required": ["status"] },
+      "then": {
+        "required": ["neu_nur_mit"],
+        "properties": { "neu_nur_mit": { "minLength": 1 } }
+      },
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["angenommen", "verworfen", "zurueckgestellt", "ersetzt", "idee"] },
+        "satz": { "type": "string", "minLength": 1 },
+        "grund": { "type": "string", "minLength": 1 },
+        "quelle": { "type": "string", "minLength": 1 },
+        "thema": { "type": "string" },
+        "neu_nur_mit": { "type": "string" },
+        "steht_schon_wo": { "type": "string" },
+        "haengt_an": { "type": "string" },
+        "prio": { "type": ["string", "integer"] }
+      }
+    }
+  }
+}

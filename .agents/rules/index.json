@@ -1,0 +1,65 @@
+{
+  "playbookVersion": "25.28.0",
+  "rules": [
+    {
+      "trigger": "agents",
+      "path": ".agents/rules/agents.md",
+      "readBefore": "starting a sub-agent or a session",
+      "budgetTokens": 1100
+    },
+    {
+      "trigger": "audit",
+      "path": ".agents/rules/audit.md",
+      "readBefore": "starting a new slice or design round, running a state audit, or syncing from or diverging from a source",
+      "budgetTokens": 2100
+    },
+    {
+      "trigger": "carrier",
+      "path": ".agents/rules/carrier.md",
+      "readBefore": "deferring a point, or closing an issue",
+      "budgetTokens": 4000
+    },
+    {
+      "trigger": "chat",
+      "path": ".agents/rules/chat.md",
+      "readBefore": "the first answer to the maintainer",
+      "budgetTokens": 1000
+    },
+    {
+      "trigger": "code",
+      "path": ".agents/rules/code.md",
+      "readBefore": "writing code",
+      "budgetTokens": 4300
+    },
+    {
+      "trigger": "docs",
+      "path": ".agents/rules/docs.md",
+      "readBefore": "touching a doc or a timestamped file",
+      "budgetTokens": 2550
+    },
+    {
+      "trigger": "evidence",
+      "path": ".agents/rules/evidence.md",
+      "readBefore": "claiming something is done, green, or measured",
+      "budgetTokens": 1100
+    },
+    {
+      "trigger": "pr",
+      "path": ".agents/rules/pr.md",
+      "readBefore": "opening or maintaining a pull request",
+      "budgetTokens": 11100
+    },
+    {
+      "trigger": "review",
+      "path": ".agents/rules/review.md",
+      "readBefore": "posting a review",
+      "budgetTokens": 1800
+    },
+    {
+      "trigger": "session",
+      "path": ".agents/rules/session.md",
+      "readBefore": "giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line",
+      "budgetTokens": 1300
+    }
+  ]
+}

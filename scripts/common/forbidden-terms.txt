@@ -1,0 +1,19 @@
+# Retired terms. One per line, case-SENSITIVE literal, then a tab or two-plus
+# spaces, then the reason shown when it is found.
+#
+# Case-sensitive on purpose: `Ist-Stand-Audit` is retired while the audit file
+# name `audit/ist-stand-<stempel>.md` (the old name existing audits keep) is not, and only case
+# tells them apart.
+#
+# Exempt paths are decided by the script, not here: docs/decisions/ (immutable
+# history) and docs/tasks/ (a spec file quotes the terms it retires).
+#
+# Only put a term here once nothing in the repository may carry it any more. A
+# term the rules still use in a deliberate negation ("builds no review prompt")
+# does not belong in this list - the check cannot tell a negation from a use.
+
+Beleg-Stand        the evidence-date line was dropped; evidence is owed only for what the diff does not show
+hard v1            superseded by the wave block `hard v2`
+Ist-Stand-Audit    now `State Audit` (AGENTS.md)
+OpenFastTrace      the coverage-status names were dropped from the task spec
+Needs:             the coverage-type line was dropped from the task spec

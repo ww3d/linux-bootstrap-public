@@ -1,0 +1,334 @@
+{
+  "schemaVersion": 1,
+  "playbookVersion": "25.28.0",
+  "playbookCommit": "10dff98fecbab16840951e5b0eb4b8540e055d75",
+  "stacks": [
+    "other"
+  ],
+  "files": {
+    ".agents/core-rules.json": {
+      "blob": "3b74132c3d574859158e07d9f2ba37a962f25e9f",
+      "kind": "mirror"
+    },
+    ".agents/rules/agents.md": {
+      "blob": "70d641e4c1dff0bdc85e235deb96e9b858ce68b3",
+      "kind": "mirror"
+    },
+    ".agents/rules/audit.md": {
+      "blob": "ef0e4475334a3928413978d4d1ae9f112dbb11e7",
+      "kind": "mirror"
+    },
+    ".agents/rules/carrier.md": {
+      "blob": "5da4c71d7a02ead748bafe6adc105cca89c1a567",
+      "kind": "mirror"
+    },
+    ".agents/rules/chat.md": {
+      "blob": "aa2d63ed62fa136a4a7284c4c691201bb8d5215d",
+      "kind": "mirror"
+    },
+    ".agents/rules/code.md": {
+      "blob": "29d22dc7ac19445e575970de7c933ab6bd0c839f",
+      "kind": "mirror"
+    },
+    ".agents/rules/docs.md": {
+      "blob": "1bdd99b8f2aa959dd30443a7ed3b2333fdbfcde2",
+      "kind": "mirror"
+    },
+    ".agents/rules/evidence.md": {
+      "blob": "955e04f508d7f05d1f1494739f178e3415de7641",
+      "kind": "mirror"
+    },
+    ".agents/rules/index.json": {
+      "blob": "33d156c0afae3864f493678d01b72fd4d5a120f8",
+      "kind": "mirror"
+    },
+    ".agents/rules/pr.md": {
+      "blob": "5a582ea8352a6620852199f9db10428789a801f5",
+      "kind": "mirror"
+    },
+    ".agents/rules/review.md": {
+      "blob": "d84c482895bb934d95563e39ff92c2059f0af67d",
+      "kind": "mirror"
+    },
+    ".agents/rules/session.md": {
+      "blob": "7a891800d65c46b7dc9090968475625803fd484c",
+      "kind": "mirror"
+    },
+    ".agents/session-kinds.json": {
+      "blob": "9c839847f8c9bab5c5423efaef790883c02d80b3",
+      "kind": "mirror"
+    },
+    ".agents/tech/README.md": {
+      "blob": "447d63ab1a9d4c59f8eeb421b73b0ad4677a51fd",
+      "kind": "mirror"
+    },
+    ".claude/commands/read-check.md": {
+      "blob": "87cefc82a1e085c3e4934f0f498b9edfe43d312b",
+      "kind": "mirror"
+    },
+    ".claude/hooks/block-announce-end.sh": {
+      "blob": "87ddd8bb0daabe74bd845d35b25cff4850e9a970",
+      "kind": "mirror"
+    },
+    ".claude/hooks/guard-kill.sh": {
+      "blob": "ad0d7b7e980051773918fafb840a400d0b64cfd2",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/grant-kill.sh": {
+      "blob": "8aaf70d6b1492523f24d0833de560e084f9d8cd4",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/own-tree.ps1": {
+      "blob": "49418b2b5285267a7bb03e4817894f0746ec4651",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/proc.sh": {
+      "blob": "818909748640486eab56b7ea8d068740caea0890",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/stdin.sh": {
+      "blob": "54a43983ff395a161989ac79ef7557ad095dd8aa",
+      "kind": "mirror"
+    },
+    ".claude/hooks/read-confirm.sh": {
+      "blob": "6f29e6b5fae8860aba7d871514c1bf883bb3bead",
+      "kind": "mirror"
+    },
+    ".claude/hooks/record-rule-read.sh": {
+      "blob": "df8c6c564cc1e6bc5e120d0e92047876f4604b55",
+      "kind": "mirror"
+    },
+    ".claude/hooks/remind-before-compact.sh": {
+      "blob": "8d64cccca394e85189259cfcfeecbc2eede0ce8a",
+      "kind": "mirror"
+    },
+    ".claude/hooks/require-receipt.sh": {
+      "blob": "97ef7597817bf6896a0eabd2f2682b4ce8208141",
+      "kind": "mirror"
+    },
+    ".claude/hooks/require-rule-read.sh": {
+      "blob": "58dbea4f6362decefe3a8d8ecdea31dad505b6c1",
+      "kind": "mirror"
+    },
+    ".claude/hooks/restore-compact-state.sh": {
+      "blob": "1063369f21a69bd61f50e757022801354d663673",
+      "kind": "mirror"
+    },
+    ".claude/hooks/save-compact-state.sh": {
+      "blob": "5ea210db12389b9d4b0afed1c6ca9d84738e8365",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/README.md": {
+      "blob": "0bf32aad541d3d8c3046740de9dcf5ae4bceb311",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/bench.sh": {
+      "blob": "5a878ae18aa970e97bc07b145b5f9cb725ddd418",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/mkfixtures.sh": {
+      "blob": "209fa2bc36e83343f3cad25d4b5679571822f739",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/run-folder.sh": {
+      "blob": "3cae039a86596a7a8d793536d992f0958adfc599",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/run-tests.sh": {
+      "blob": "173f961a07849c20af262de6a923d4ec4c092cf5",
+      "kind": "mirror"
+    },
+    ".claude/settings.json": {
+      "blob": "ef8d5801f4d2d369a9f007208651439cd84ef246",
+      "kind": "generated"
+    },
+    ".claude/skills/ccweb-prompt/SKILL.md": {
+      "blob": "6bc09060a4bae5c015bfae64966bfeadf504ceb3",
+      "kind": "mirror"
+    },
+    ".claude/skills/ccweb-prompt/reference/decision-log.md": {
+      "blob": "4d719226068498c46bad1e9f40e6c01b0b6cff67",
+      "kind": "mirror"
+    },
+    ".claude/skills/ccweb-prompt/reference/spec.md": {
+      "blob": "208186ad13c802d8f8c147ad6079a5201c6bd734",
+      "kind": "mirror"
+    },
+    ".claude/skills/chat-handoff/SKILL.md": {
+      "blob": "da54e2becd2d91fbed3146ac23e353909a2ad959",
+      "kind": "mirror"
+    },
+    ".claude/skills/chat-handoff/reference/cross-check.md": {
+      "blob": "125ccea69a10f4ba9ae51937ca2cf4b860577c07",
+      "kind": "mirror"
+    },
+    ".claude/skills/controller-mode/SKILL.md": {
+      "blob": "e25ba98796b848e86dd7dc0dc8bf1a1e2380d8ef",
+      "kind": "mirror"
+    },
+    ".claude/skills/dev-task/SKILL.md": {
+      "blob": "4e107a222afe42edccb5343fe8ed94da30ceef0f",
+      "kind": "mirror"
+    },
+    ".claude/skills/pr-poll-review/SKILL.md": {
+      "blob": "6b4f53c3a5fd6f5d04c024bef8a16a5c1196c516",
+      "kind": "mirror"
+    },
+    ".claude/skills/pr-poll-review/reference/checks.md": {
+      "blob": "c1c4d573fb7643018e81c9183af059e8cf337280",
+      "kind": "mirror"
+    },
+    ".claude/skills/pr-poll-review/reference/gates.md": {
+      "blob": "b23f70a3d0712645e655529e0b26c936d1934df9",
+      "kind": "mirror"
+    },
+    ".claude/skills/pr-poll-review/reference/report.md": {
+      "blob": "67c47f966a89a81a7fd2b03066cc0b0800a098ab",
+      "kind": "mirror"
+    },
+    ".claude/skills/pr-poll-review/reference/review-modes.md": {
+      "blob": "60860e798bb634172415ca540322849477fd2b7c",
+      "kind": "mirror"
+    },
+    ".claude/skills/state-audit/SKILL.md": {
+      "blob": "cd28505571c5c86d3a3ddef1a540121169155077",
+      "kind": "mirror"
+    },
+    ".claude/skills/state-audit/reference/report.md": {
+      "blob": "c4e2ed85998c42013b976609a13e8a73e96a16d9",
+      "kind": "mirror"
+    },
+    "AGENTS.md": {
+      "blob": "a819c2328e34b22b0a0e67e26a6053839b29d489",
+      "kind": "mirror"
+    },
+    "docs/common/README.md": {
+      "blob": "8b0487ad61a6f3c248a5f8a07737e7ec9ff3e710",
+      "kind": "mirror"
+    },
+    "docs/common/ci.md": {
+      "blob": "dcda61d6575b2b6736132059d848ae8c9a5b341c",
+      "kind": "mirror"
+    },
+    "docs/common/console-output.md": {
+      "blob": "6400640b4c6edc56a1a83dc39dc85fc42e254c51",
+      "kind": "mirror"
+    },
+    "docs/common/developer-guide.md": {
+      "blob": "b87a8f88815764c40e37fbcba20fc182d9a8c3f3",
+      "kind": "mirror"
+    },
+    "scripts/common/README.md": {
+      "blob": "3afa717eae3c5dc75b4dec496b4a54e4c2c6805d",
+      "kind": "mirror"
+    },
+    "scripts/common/check-claudemd-remains.ps1": {
+      "blob": "e11985fde100bb30d3b837bc8062cff0845ca3b4",
+      "kind": "mirror"
+    },
+    "scripts/common/check-root.ps1": {
+      "blob": "c9123e915196539b4b4056e963ceefe8c8ed9530",
+      "kind": "mirror"
+    },
+    "scripts/common/check-terminology.ps1": {
+      "blob": "f5999c0920f50a395d996ee1583ea394995222a8",
+      "kind": "mirror"
+    },
+    "scripts/common/close-tracking-issue.ps1": {
+      "blob": "c433e204195492ed6e079279f563214cf6593867",
+      "kind": "mirror"
+    },
+    "scripts/common/edit-issue-body.ps1": {
+      "blob": "25d6759726467186f9fcd530e520a5e3af94857e",
+      "kind": "mirror"
+    },
+    "scripts/common/find-closable-issues.ps1": {
+      "blob": "aab05d8a0d80c26b86956797240bf007c1ae3a1a",
+      "kind": "mirror"
+    },
+    "scripts/common/find-moved-fixes.ps1": {
+      "blob": "d1e78048e3df50b910459a9e12ddf26fa77d1c07",
+      "kind": "mirror"
+    },
+    "scripts/common/forbidden-terms.txt": {
+      "blob": "44953afaf9ac5fde27c1245a10c636e1936428fe",
+      "kind": "mirror"
+    },
+    "scripts/common/get-audit-due.ps1": {
+      "blob": "ab32d2fc896875dd6df5688daa4b5aef1b0d3d54",
+      "kind": "mirror"
+    },
+    "scripts/common/get-audit-settings.ps1": {
+      "blob": "b5b09dcbe3b6c660262ea54c45c94a45d58a45c4",
+      "kind": "mirror"
+    },
+    "scripts/common/get-audit-worklist.ps1": {
+      "blob": "e5679c2a6fa7ee2fad2a7f54fba5d02a912e8c1e",
+      "kind": "mirror"
+    },
+    "scripts/common/get-carrier-formula.ps1": {
+      "blob": "e59317c377aa09e5fc533adc4fdb960c963a51a6",
+      "kind": "mirror"
+    },
+    "scripts/common/get-checklist-items.ps1": {
+      "blob": "da95282122554aeca6282e205ca93d2892b758e1",
+      "kind": "mirror"
+    },
+    "scripts/common/get-json-schema-error.ps1": {
+      "blob": "935b59a8d7a169d8689225d2928225bccd905d44",
+      "kind": "mirror"
+    },
+    "scripts/common/get-ledger-file.ps1": {
+      "blob": "2cc06c996fb55d8c6419b8152ac4048dc0062a10",
+      "kind": "mirror"
+    },
+    "scripts/common/get-rejected-points.ps1": {
+      "blob": "b7e71ed1db7560c27a92dbcaea0b976a63f37dd6",
+      "kind": "mirror"
+    },
+    "scripts/common/get-rest-items.ps1": {
+      "blob": "6d1b4548165e97e0f26867f6ba4803d206ea930e",
+      "kind": "mirror"
+    },
+    "scripts/common/invoke-utf8-output.ps1": {
+      "blob": "a0561c0e97796d3ae1add2b4269413184b148371",
+      "kind": "mirror"
+    },
+    "scripts/common/ledger.schema.json": {
+      "blob": "79193249a3d61f0a56c5327ddbdd2a81c7ab87dd",
+      "kind": "mirror"
+    },
+    "scripts/common/markdown-sentences.ps1": {
+      "blob": "fc2ec806f5bf07dc431e941d71e4e333eb19d0c3",
+      "kind": "mirror"
+    },
+    "scripts/common/measure-review-comment.ps1": {
+      "blob": "ec7d002aba642f4e766388f7706ea3b11e32e670",
+      "kind": "mirror"
+    },
+    "scripts/common/root-layout.json": {
+      "blob": "4582cd26b9f5f40cb2196572e6f635047badaae7",
+      "kind": "mirror"
+    },
+    "scripts/common/sweep-carriers.ps1": {
+      "blob": "2cbd75c56dabf58614a9eae7b522dfc9067165d7",
+      "kind": "mirror"
+    },
+    "scripts/common/test-applied-suggestions.ps1": {
+      "blob": "899096da0f8d9dc12d5bf5ea78fcc8e103befbe3",
+      "kind": "mirror"
+    },
+    "scripts/common/test-ledger.ps1": {
+      "blob": "a093448da202389311e772ce963528689099f265",
+      "kind": "mirror"
+    },
+    "scripts/common/test-merge-ready.ps1": {
+      "blob": "2be72924b7ef73d778cba89b08f000801754ab14",
+      "kind": "mirror"
+    },
+    "scripts/common/test-pure-catch-up.ps1": {
+      "blob": "2acb98c6ea8c62c82c0346a7e19758ea61a39d8a",
+      "kind": "mirror"
+    }
+  }
+}

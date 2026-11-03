@@ -29,34 +29,49 @@
   - Sentence case, kein text-transform: uppercase.
   - Kein opacity auf Text — gedaempft wird ueber --text-muted.
   - Aeussere Container bleiben transparent; Hintergrund/Radius/Schatten stellt der Host.
-  - Buttons sind vorgestylt: den Submit nicht accent-fuellen. Severity-Badges und Legenden-Buttons
-    dagegen Farbe UND Groesse INLINE setzen, sonst neutralisiert und aufblaeht die button-Basisregel
-    des Hosts sie.
+  - Buttons sind vorgestylt: den Submit nicht accent-fuellen. Label-Pills, Batch- und
+    Legenden-Buttons dagegen Farbe UND Groesse INLINE setzen, sonst neutralisiert und aufblaeht die
+    button-Basisregel des Hosts sie.
 
   MODELL:
-  - Findings kommen aus dem Stufe-A-Report (INJECTION-POINT: FINDINGS). Ihre Severity ist READ-ONLY
-    (statischer Badge) — man postet oder streicht sie nur. Findings tragen kein a/b/c (das gibt es nur
-    bei den offenen Fragen).
-  - Zwei Achsen: Severity (Blocker/Major/Minor) und Herkunft (Review vs. Custom). Der Prio-Select
-    der Custom-Punkte bietet nur die drei Severities (Default Blocker). „Custom" ist reine Herkunft:
-    das Custom-Legenden-Toggle trifft alle eigenen Punkte, unabhaengig von ihrer Severity.
+  - Punkte kommen aus dem Stufe-A-Report (INJECTION-POINT: FINDINGS). ALLE stehen im Widget, auch
+    die nicht blockierenden — wer nur die blockierenden zeigte, zwingt den Maintainer zurueck in den
+    Report, sobald er einen Nit hochziehen will. Punkte tragen kein a/b/c (das gibt es nur bei den
+    offenen Fragen).
+  - Zwei Achsen: LABEL (Conventional Comments, SEVS) und Herkunft (Review vs. Custom). „Custom" ist
+    reine Herkunft: das Custom-Legenden-Toggle trifft alle eigenen Punkte, unabhaengig vom Label.
+  - DAS LABEL IST UMSTELLBAR, in beide Richtungen (`nitpick:` <-> `issue: (blocking)`), vorbelegt
+    mit der Einschaetzung des Reviews. Genau dieses Paar und nicht mehr (SWITCHABLE): ein Punkt,
+    der nachtraeglich zur `question:` wuerde, haette kein a/b/c — und die vorbelegte Empfehlung ist
+    das, worauf das Freigabe-Prinzip beruht. Custom-Punkte behalten die volle Liste.
+    Das Label steuert die Blocking-Wirkung und ist damit eine
+    Maintainer-Entscheidung, keine Review-Aussage. DER FINDING-TEXT BLEIBT READ-ONLY — nur
+    Custom-Karten sind editierbar. Damit traegt das Widget weiter dieselben Inhalte wie Stufe A: was
+    sich aendert, ist eine Eingabe des Users, kein Inhalt.
+  - Die Kopfzeile (.balance) zeigt das Ergebnis der Umstellung — „N blockend, M nicht blockend",
+    gerechnet ueber die tatsaechlich geposteten Punkte. Ohne sie wird die Wirkung eines umgestellten
+    Labels erst nach dem Absenden sichtbar. Daneben die zwei Nit-Batch-Aktionen („alle Nits als
+    Suggestion posten", „alle Nits streichen"): sie sind der Grund, warum ein Nit billig ist.
   - Eigene Punkte sind mehrzeilig (Markdown bleibt im Payload verbatim), fortlaufend nach den
-    Findings nummeriert, editier- und loeschbar.
+    Review-Punkten nummeriert, editier- und loeschbar.
   - OFFENE FRAGEN kommen aus einem zweiten, getrennten Injection-Point (QUESTIONS), Namensraum
-    F1/F2/…. Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Eigener Bereich mit
-    ANDERER Interaktion: nicht posten/streichen, sondern EINE Wahl pro Frage — a=SOTA / b=Grosse /
-    c=Empfehlung / eigene Antwort / offen lassen / verwerfen. c ist vorbelegt (Default-Prinzip wie
-    „alle posten"); der a/b/c-Text ist read-only, waehlbar ist nur, welche Option gilt. Optionales
-    explain = Klartext-Zeile unter dem Titel. Leeres QUESTIONS entfernt den ganzen Bereich. Eine
-    leere Custom-Antwort faellt auf c zurueck.
+    F1/F2/…. Quelle: was der Autor im PR offen liess + was Claude im Review sieht, in der Kurzform
+    aus `ccweb-prompt` § "Design-Runde" (Worum / Empfehlung / Verworfen mit Grund). Eigener Bereich
+    mit ANDERER Interaktion: nicht posten/streichen, sondern EINE Wahl pro Frage — Empfehlung (c) /
+    je verworfene Alternative (a, b) / eigene Antwort / offen lassen / verwerfen. "Worum" ist keine
+    Option, sondern die Frage-Beschreibung selbst (Titel + explain). c ist vorbelegt
+    (Default-Prinzip wie „alle posten"); der Options-Text ist read-only, waehlbar ist nur, welche
+    Option gilt. Optionales explain = Klartext-Zeile unter dem Titel. Leeres QUESTIONS entfernt den
+    ganzen Bereich. Eine leere Custom-Antwort faellt auf c zurueck.
   - DIE ZWEI AUSSTIEGE (QEXITS) sind fuer jede Frage waehlbar und stehen fest, kommen also nicht aus
-    QUESTIONS: „offen lassen" (nicht als Anweisung posten, Traeger Pflicht) und „verwerfen" (endet
-    ersatzlos, kein Traeger). Beide sind ausdruecklich waehlbar, damit kein Punkt in den bequemeren
-    rutscht; submit gibt sie unterscheidbar aus (`offen lassen` / `verwerfen` statt a/b/c/eigene).
-    Vorbelegt bleibt c — „verwerfen" wird nie unterstellt (SKILL.md, Stufe B).
+    QUESTIONS. Ihr Ziel ist eindeutig benannt: „offen lassen" heisst, der Punkt geht als Zeile in den
+    BODY DES TRACKING ISSUES; „verwerfen" beendet ihn ersatzlos. Beide sind ausdruecklich waehlbar,
+    damit kein Punkt in den bequemeren rutscht; submit gibt sie unterscheidbar aus
+    (`offen lassen` / `verwerfen` statt a/b/c/eigene). Vorbelegt bleibt c — „verwerfen" wird nie
+    unterstellt (SKILL.md, Stufe B).
 
   Tastatur: Enter/Shift+Enter = neue Zeile · Strg/Cmd+Enter = freigeben (nimmt offenen
-  Composer-Text mit seiner Prio automatisch als Punkt mit) · Strg/Cmd+Shift+Enter = hinzufuegen.
+  Composer-Text mit seinem Label automatisch als Punkt mit) · Strg/Cmd+Shift+Enter = hinzufuegen.
   Absenden ueber sendPrompt(); ohne Host faellt es auf die .out-Anzeige zurueck und kopiert den
   Payload zusaetzlich in die Zwischenablage (GERUEST).
 -->
@@ -167,16 +182,16 @@
   .card.struck .title, .card.struck .id, .card.struck .desc { color: var(--text-muted); }
   .card.struck .title, .card.struck .id { text-decoration: line-through; }
 
-  /* Findings: Severity vom Review -> statischer, nicht aenderbarer Badge (Sentence case). */
-  .card .badge {
-    margin-left: auto; white-space: nowrap; font: 500 11px/1 var(--font-mono);
-    padding: 3px 8px; border-radius: 999px;
-  }
-  .card .badge.blocker { background: var(--bg-danger); color: var(--text-danger); }
-  .card .badge.major   { background: var(--bg-warning); color: var(--text-warning); }
-  .card .badge.minor   { background: var(--surface-1); color: var(--text-secondary); }
+/* Farbe nach Blocking-Wirkung, nicht nach Label: was den PR aufhaelt, muss auf einen
+     Blick anders aussehen als was ihn nicht aufhaelt. `question` traegt beide Faelle. */
+  .lbl-issue        { background: var(--bg-danger);  color: var(--text-danger); }
+  .lbl-question     { background: var(--bg-warning); color: var(--text-warning); }
+  .lbl-question-nb  { background: var(--surface-1);  color: var(--text-secondary); }
+  .lbl-suggestion   { background: var(--surface-1);  color: var(--text-secondary); }
+  .lbl-nitpick      { background: var(--surface-1);  color: var(--text-secondary); }
+  .lbl-custom       { background: var(--bg-accent);  color: var(--text-accent); }
 
-  /* Custom-Punkte: mehrzeilig editierbar + loeschbar, mit aenderbarer Severity-Pill. */
+  /* Custom-Punkte: mehrzeilig editierbar + loeschbar. Nur sie tragen contenteditable. */
   .card .title[contenteditable] { outline: none; border-bottom: 1px dashed transparent; cursor: text; min-width: 60px; }
   .card .title[contenteditable]:hover { border-bottom-color: var(--border); }
   .card .title[contenteditable]:focus { border-bottom-color: var(--text-accent); }
@@ -188,7 +203,9 @@
   .card .del:hover { color: var(--text-danger); background: var(--surface-1); }
   .card .del:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
 
-  /* Severity-Pill (nur Custom + Eingabefeld): nativer Select in Badge-Optik. */
+  /* Label-Pill: nativer Select in Badge-Optik. Anders als frueher sitzt sie auf JEDER Karte -
+     das Label steuert die Blocking-Wirkung und ist damit eine Maintainer-Entscheidung. Der
+     Finding-TEXT bleibt read-only (nur Custom-Karten sind editierbar). */
   .prio-wrap { position: relative; display: inline-flex; align-items: center; border-radius: 999px; }
   .card .prio-wrap { margin-left: auto; }
   .prio-wrap select {
@@ -198,28 +215,44 @@
   .prio-wrap select:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
   .prio-wrap .caret { position: absolute; right: 7px; font-size: 9px; color: var(--text-muted); pointer-events: none; }
   .prio-wrap option { color: var(--text-primary); background: var(--surface-2); }
-  .prio-wrap.blocker { background: var(--bg-danger); color: var(--text-danger); }
-  .prio-wrap.major   { background: var(--bg-warning); color: var(--text-warning); }
-  .prio-wrap.minor   { background: var(--surface-1); color: var(--text-secondary); }
+  /* max-content instead of a number: the DECORATION decides the blocking effect
+     and must never be the first thing that gets cut - at 200px the select
+     rendered `nitpick: (non-blocki`, which reads as neither. A fixed width would
+     have to be computed against the font metric AND against box-sizing, and
+     box-sizing lives in the GERUEST - outside this file it is not guaranteed.
+     max-content sidesteps both, and it keeps holding when a label is added. */
+  .prio-wrap select { max-width: none; width: max-content; }
 
   .legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--border); font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
   .legend .sep { color: var(--border); }
-  /* Legende = Filter-Toggle (Blocker/Major/Minor nach Severity, Custom nach Herkunft). Groesse hier
+  /* Legende = Filter-Toggle nach Label, plus Custom nach Herkunft. Groesse hier
      explizit klein — genau die Werte, die im Host INLINE gesetzt werden muessen, sonst blaeht die
      button-Basisregel die Schalter auf Control-Hoehe. inert behaelt die Rollenfarbe (ein leerer
-     Blocker-Toggle muss rot bleiben — "keine roten Badges" ist selbst ein Signal) und verliert nur
+     issue-Toggle muss rot bleiben — "keine roten Badges" ist selbst ein Signal) und verliert nur
      die Interaktion. */
   .legend .sevtoggle {
     appearance: none; border: 0; cursor: pointer; font: 500 11px/1.4 var(--font-mono);
     padding: 2px 8px; min-height: 0; height: auto; border-radius: 999px; transition: filter .12s;
   }
-  .legend .sevtoggle.blocker { background: var(--bg-danger); color: var(--text-danger); }
-  .legend .sevtoggle.major   { background: var(--bg-warning); color: var(--text-warning); }
-  .legend .sevtoggle.minor   { background: var(--surface-1); color: var(--text-secondary); border: .5px solid var(--border); }
-  .legend .sevtoggle.custom  { background: var(--bg-accent); color: var(--text-accent); }
+  .legend .sevtoggle.lbl-nitpick,
+  .legend .sevtoggle.lbl-suggestion { border: .5px solid var(--border); }
   .legend .sevtoggle:not(.inert):hover { filter: brightness(1.06); }
   .legend .sevtoggle.inert { cursor: default; }
   .legend .sevtoggle:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+
+  /* Kopfzeile mit dem Ergebnis der Umstellung und die zwei Nit-Batch-Aktionen. Ohne die Zeile
+     wird die Wirkung eines umgestellten Labels erst nach dem Absenden sichtbar. */
+  .balance { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); }
+  .balance .nblock { color: var(--text-danger); }
+  .balance .batch { margin-left: auto; display: flex; gap: 6px; }
+  .balance .batchbtn {
+    appearance: none; border: .5px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+    cursor: pointer; font: 500 11px/1.4 var(--font-mono); padding: 2px 8px; min-height: 0; height: auto;
+    border-radius: 999px; transition: filter .12s;
+  }
+  .balance .batchbtn:not([aria-disabled="true"]):hover { filter: brightness(1.06); }
+  .balance .batchbtn[aria-disabled="true"] { cursor: default; opacity: .5; }
+  .balance .batchbtn:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
 
   .foot { padding: 14px 16px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
   .addcol { display: flex; flex-direction: column; gap: 8px; }
@@ -253,10 +286,11 @@
 
   /* ==== OFFENE FRAGEN — eigener, vom Findings-Block abgetrennter Bereich ======================
      Andere Interaktion als Findings: nicht posten/streichen, sondern EINE Wahl pro Frage
-     (a=SOTA / b=Grosse / c=Empfehlung / eigene Antwort / offen lassen / verwerfen). c ist
-     vorbelegt; der User uebersteuert nur, wo er anders entscheidet. Der a/b/c-Text ist read-only,
-     waehlbar ist nur, welche Option gilt. Die beiden Ausstiege sitzen unter einer duennen Linie —
-     sie beenden die Frage, statt sie zu beantworten, und diese Trennung muss sichtbar sein.
+     (Empfehlung=c / je verworfene Alternative=a,b / eigene Antwort / offen lassen / verwerfen). c
+     ist vorbelegt; der User uebersteuert nur, wo er anders entscheidet. Der Options-Text ist
+     read-only, waehlbar ist nur, welche Option gilt. Die beiden Ausstiege sitzen unter einer
+     duennen Linie — sie beenden die Frage, statt sie zu beantworten, und diese Trennung muss
+     sichtbar sein.
      Leeres QUESTIONS -> der ganze Bereich bleibt aus dem DOM (kein leerer Rahmen). ============ */
   .qsection { border-top: 1px solid var(--border); }
   .qhead { padding: 12px 16px 6px; font: 500 11px/1.3 var(--font-mono); color: var(--text-muted); }
@@ -265,7 +299,7 @@
   .qcard .qtop { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
   .qcard .qid { font: 500 13px/1.3 var(--font-mono); color: var(--text-accent); }
   .qcard .qtitle { font-weight: 500; font-size: 14px; color: var(--text-primary); }
-  .qcard .qfile { grid-column: 2; font: 400 12px/1.4 var(--font-mono); color: var(--text-muted); margin-bottom: 6px; }
+  .qcard .qfile { font: 400 12px/1.4 var(--font-mono); color: var(--text-muted); margin-bottom: 6px; }
   .qcard .qexplain { font: 400 13px/1.45 var(--font-sans); color: var(--text-secondary); margin-bottom: 8px; }
   .qcard .qexplain .k { font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); }
   .qopts { display: flex; flex-direction: column; gap: 2px; }
@@ -297,7 +331,7 @@
 <div class="wrap">
 
   <!-- ==== VORLAGE: ab hier 1:1 in den Host uebernehmen ==== -->
-  <div class="widget" role="group" aria-label="Freigabe der Review-Findings">
+  <div class="widget" role="group" aria-label="Freigabe der Review-Punkte">
     <div class="whead">
       <div class="counter">
         <span class="cnum"><span id="cnt">0</span> von <span id="tot">0</span></span>
@@ -312,13 +346,15 @@
 
     <ul class="cards" id="cards"></ul>
 
-    <div class="legend" aria-label="Filter nach Severity und Herkunft">
-      <span>Skala:</span>
-      <button type="button" class="sevtoggle blocker" data-key="blocker">Blocker</button><span class="sep">·</span>
-      <button type="button" class="sevtoggle major" data-key="major">Major</button><span class="sep">·</span>
-      <button type="button" class="sevtoggle minor" data-key="minor">Minor</button><span class="sep">·</span>
-      <button type="button" class="sevtoggle custom" data-key="custom">Custom</button>
+    <div class="balance" id="balance">
+      <span><span class="nblock" id="nBlocking">0</span> blockend · <span id="nNonBlocking">0</span> nicht blockend</span>
+      <span class="batch">
+        <button type="button" class="batchbtn" id="nitPostBtn">alle Nits als Suggestion posten</button>
+        <button type="button" class="batchbtn" id="nitDropBtn">alle Nits streichen</button>
+      </span>
     </div>
+
+    <div class="legend" id="legend" aria-label="Filter nach Label und Herkunft"></div>
 
     <!-- Offene Fragen: eigener Bereich, andere Interaktion (Wahl statt posten/streichen).
          Wird per JS entfernt, wenn QUESTIONS leer ist. -->
@@ -331,13 +367,9 @@
       <div class="addcol">
         <textarea id="composer" rows="1" placeholder="Eigene Punkte dazu? (Enter = neue Zeile)" aria-label="Eigenen Punkt hinzufuegen"></textarea>
         <div class="addctl">
-          <span class="lead">Prio:</span>
-          <span class="prio-wrap blocker" id="newPrioWrap">
-            <select id="newPrio" aria-label="Severity des neuen Punkts">
-              <option value="blocker" selected>Blocker</option>
-              <option value="major">Major</option>
-              <option value="minor">Minor</option>
-            </select>
+          <span class="lead">Label:</span>
+          <span class="prio-wrap lbl-issue" id="newPrioWrap">
+            <select id="newPrio" aria-label="Label des neuen Punkts"></select>
             <span class="caret" aria-hidden="true">▾</span>
           </span>
           <button type="button" class="addbtn" id="addBtn" title="Strg/Cmd+Shift+Enter">Hinzufuegen</button>
@@ -362,25 +394,56 @@
 
 <script>
   // INJECTION-POINT: aus dem Stufe-A-Report befuellen. Reihenfolge = Nummern aus Stufe A.
-  // sev ist eine der drei Severities: "blocker" | "major" | "minor". READ-ONLY fuer Findings.
-  // sev ist eine der drei Severities. Findings tragen ihre Empfehlung im desc-Text selbst — kein
-  // eigenes a/b/c (das gibt es nur bei den offenen Fragen, siehe QUESTIONS).
+  // sev ist der Conventional-Comments-Schluessel des Punktes (siehe SEVS). ALLE Punkte stehen hier,
+  // auch die nicht blockierenden: wer nur die blockierenden zeigte, zwingt den Maintainer zurueck
+  // in den Report, sobald er einen Nit hochziehen will.
+  // Das LABEL ist umstellbar — es steuert die Blocking-Wirkung und ist damit eine
+  // Maintainer-Entscheidung. Der Finding-TEXT bleibt read-only (SKILL.md, § "Strikte Regeln").
+  // Punkte tragen ihre Empfehlung im desc-Text selbst — kein eigenes a/b/c (das gibt es nur bei den
+  // offenen Fragen, siehe QUESTIONS). Ein `nitpick:` traegt in desc den Suggestion-Text, weil genau
+  // der gepostet wird.
   const FINDINGS = [
-    { n: 1, sev: "blocker", title: "Kein Escaping fuer Trennzeichen", file: "export/CsvWriter.cs:88",
+    { n: 1, sev: "issue", title: "Kein Escaping fuer Trennzeichen", file: "export/CsvWriter.cs:88",
       desc: "Felder mit Semikolon brechen die CSV-Struktur; RFC-4180-Quoting fehlt." },
-    { n: 2, sev: "major", title: "Reuse-Blindness: Formatter dupliziert", file: "export/CsvWriter.cs:12",
+    { n: 2, sev: "issue", title: "Reuse-Blindness: Formatter dupliziert", file: "export/CsvWriter.cs:12",
       desc: "Neuer NumberFormatter dupliziert Shared.NumberFormat — konsolidieren statt kopieren." },
-    { n: 3, sev: "minor", title: "Ungenutztes using", file: "export/CsvWriter.cs:5",
-      desc: "using System.Linq wird nicht verwendet." },
+    { n: 3, sev: "nitpick", title: "Ungenutztes using", file: "export/CsvWriter.cs:5",
+      desc: "Suggestion: die Zeile `using System.Linq;` entfernen." },
   ];
-  const SEVS = ["blocker", "major", "minor"];         // waehlbare Severities (Achse 1)
-  const SEV_LABEL = { blocker: "Blocker", major: "Major", minor: "Minor" };
+
+  // Conventional Comments: Label plus Dekoration in EINEM Schluessel, weil die beiden nicht frei
+  // kombinierbar sind (`nitpick: (blocking)` gibt es nicht). blocking steuert Zaehlung und Badge.
+  const SEVS = ["issue", "question", "question-nb", "suggestion", "nitpick"];
+  const SEV_LABEL = {
+    "issue":       "issue: (blocking)",
+    "question":    "question: (blocking)",
+    "question-nb": "question: (non-blocking)",
+    "suggestion":  "suggestion: (non-blocking)",
+    "nitpick":     "nitpick: (non-blocking)",
+  };
+  const SEV_BLOCKING = { "issue": true, "question": true, "question-nb": false, "suggestion": false, "nitpick": false };
+  // Farbklasse je Schluessel; question-nb faellt bewusst auf die neutrale Farbe, weil es nichts
+  // aufhaelt.
+  const SEV_CLASS = {
+    "issue": "lbl-issue", "question": "lbl-question", "question-nb": "lbl-question-nb",
+    "suggestion": "lbl-suggestion", "nitpick": "lbl-nitpick",
+  };
+  // What a REVIEW card may be switched TO. Deliberately not all of SEVS: a point
+  // pulled up into `question:` would carry no a/b/c, and the pre-filled
+  // recommendation is the whole basis of the release step - it would go to the
+  // author unprepared. The skill names exactly this pair in three places
+  // (Kernprinzip, Stufe B, "Strikte Regeln"), and this is where that holds.
+  // Custom points keep the full list: they belong to the user, who writes their
+  // own text anyway.
+  const SWITCHABLE = ["issue", "nitpick"];
 
   // INJECTION-POINT: offene Fragen aus dem Stufe-A-Report (Namensraum F1, F2, … getrennt von den
-  // Findings). Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Leeres Array ->
-  // der ganze Fragen-Bereich wird entfernt. Pro Frage: a=SOTA, b=Grosse, c=Empfehlung; c ist immer
-  // die Vorbelegung. explain = Klartext-Zeile ("worum geht es"), file optional. Die zwei Ausstiege
-  // stehen fest (QEXITS) und gehoeren nicht hierher.
+  // Findings). Quelle: was der Autor im PR offen liess + was Claude im Review sieht, in der
+  // Kurzform aus `ccweb-prompt` § "Design-Runde" (Worum / Empfehlung / Verworfen mit Grund). Leeres
+  // Array -> der ganze Fragen-Bereich wird entfernt. Pro Frage: c=Empfehlung (immer die
+  // Vorbelegung), a/b=je eine verworfene Alternative (optional, 0-2 Stueck). explain =
+  // Klartext-Zeile ("worum geht es" - die Frage-Beschreibung, keine waehlbare Option), file
+  // optional. Die zwei Ausstiege stehen fest (QEXITS) und gehoeren nicht hierher.
   const QUESTIONS = [
     { n: 1, title: "Fehlerbehandlung im Export-Pfad", file: "export/CsvWriter.cs:40",
       explain: "Wie soll das Programm reagieren, wenn beim Export etwas schiefgeht?",
@@ -393,18 +456,25 @@
       b: "Options-Pattern / IConfiguration (Standard in grossen Services).",
       c: "Options-Pattern, da bereits DI im Projekt." },
   ];
-  const QOPT_LABEL = { a: "a · SOTA", b: "b · Grosse", c: "c · Empfehlung" };
+  const QOPT_LABEL = { a: "verworfen", b: "verworfen", c: "Empfehlung" };
 
   // Die zwei Ausstiege stehen fest (nicht aus QUESTIONS): sie beantworten die Frage nicht, sondern
   // beenden sie. Beide muessen ausdruecklich waehlbar sein, sonst rutscht jeder Punkt in den
   // bequemeren (SKILL.md, Stufe B). Vorbelegt bleibt trotzdem c — "verwerfen" wird nie unterstellt.
+  // Ihr Ziel steht ausformuliert dabei: "offen lassen" ist eine Ablage mit benanntem Ort,
+  // "verwerfen" beendet den Punkt.
   const QEXITS = [
-    { val: "open",    label: "offen lassen", text: "Nicht als Anweisung posten — der Punkt bleibt offen und bekommt einen Traeger." },
-    { val: "discard", label: "verwerfen",    text: "Der Punkt endet ersatzlos, ohne Traeger — wird im Review-Body protokolliert." },
+    { val: "open",    label: "offen lassen", text: "Nicht als Anweisung posten — baubar wird der Punkt ein eigener PR, sonst geht er an einen gueltigen Traeger: Tracking Issue, roadmap.md/backlog.md oder Issue im Fremd-Repo." },
+    { val: "discard", label: "verwerfen",    text: "Der Punkt endet ersatzlos, kein Traeger — wird im Review-Body protokolliert." },
   ];
   const QEXIT_LABEL = Object.fromEntries(QEXITS.map(e => [e.val, e.label]));
 
   const cardsEl = document.getElementById("cards");
+  const legendEl = document.getElementById("legend");
+  const nBlockingEl = document.getElementById("nBlocking");
+  const nNonBlockingEl = document.getElementById("nNonBlocking");
+  const nitPostBtn = document.getElementById("nitPostBtn");
+  const nitDropBtn = document.getElementById("nitDropBtn");
   const questionsEl = document.getElementById("questions");
   const qsectionEl = document.getElementById("qsection");
   const cntEl = document.getElementById("cnt");
@@ -422,16 +492,34 @@
 
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
   function allCards() { return [...cardsEl.children]; }
-  // Legende: Severity-Keys filtern nach _sev, "custom" filtert nach Herkunft.
+  // Legende: Label-Keys filtern nach _sev, "custom" filtert nach Herkunft. Aus SEVS gebaut,
+  // damit Label-Satz und Filter nicht auseinanderlaufen koennen.
   function matches(card, key) { return key === "custom" ? card._origin === "custom" : card._sev === key; }
 
-  // Aenderbare Severity-Pill (nur Custom-Zeilen; Achse 1).
-  function prioPill(li, sev) {
+  SEVS.forEach((key, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sevtoggle " + SEV_CLASS[key];
+    btn.dataset.key = key;
+    btn.textContent = SEV_LABEL[key];
+    if (i) legendEl.appendChild(Object.assign(document.createElement("span"), { className: "sep", textContent: "·" }));
+    legendEl.appendChild(btn);
+  });
+  legendEl.appendChild(Object.assign(document.createElement("span"), { className: "sep", textContent: "·" }));
+  legendEl.appendChild(Object.assign(document.createElement("button"), {
+    type: "button", className: "sevtoggle lbl-custom", textContent: "Custom",
+  })).dataset.key = "custom";
+
+  // Label-Pill. Sie sitzt auf JEDER Karte: das Label ist umstellbar, weil es die Blocking-Wirkung
+  // steuert. Der Kartentext bleibt davon unberuehrt.
+  function prioPill(li, sev, options) {
     const wrap = document.createElement("span");
-    wrap.className = "prio-wrap " + sev;
+    wrap.className = "prio-wrap " + SEV_CLASS[sev];
     const sel = document.createElement("select");
-    sel.setAttribute("aria-label", "Severity");
-    SEVS.forEach(s => {
+    sel.setAttribute("aria-label", "Label");
+    // The current value is always offered, or a card could not display its own
+    // label - that is why this is a union and not just the allowed list.
+    [...new Set([sev, ...options])].forEach(s => {
       const o = document.createElement("option");
       o.value = s; o.textContent = SEV_LABEL[s];
       if (s === sev) o.selected = true;
@@ -440,7 +528,7 @@
     const caret = document.createElement("span");
     caret.className = "caret"; caret.textContent = "▾"; caret.setAttribute("aria-hidden", "true");
     wrap.appendChild(sel); wrap.appendChild(caret);
-    sel.addEventListener("change", () => { li._sev = sel.value; wrap.className = "prio-wrap " + sel.value; sync(); });
+    sel.addEventListener("change", () => { li._sev = sel.value; wrap.className = "prio-wrap " + SEV_CLASS[sel.value]; sync(); });
     return wrap;
   }
 
@@ -459,16 +547,17 @@
     const li = document.createElement("li");
     li.className = "card";
     li.innerHTML =
-      '<input class="chk" type="checkbox" checked aria-label="Finding ' + f.n + ' posten">' +
+      '<input class="chk" type="checkbox" checked aria-label="Punkt ' + f.n + ' posten">' +
       '<div class="top"><span class="id">' + f.n + ' ·</span>' +
       '<span class="title">' + esc(f.title) + '</span></div>' +
       '<div class="desc">' + esc(f.file) + ' — ' + esc(f.desc) + '</div>';
     li.dataset.n = f.n; li._sev = f.sev; li._origin = "review";
     li._title = li.querySelector(".title");
-    const b = document.createElement("span");
-    b.className = "badge " + f.sev; b.textContent = SEV_LABEL[f.sev];
-    b.title = "Vom Review gesetzt — im Widget nicht aenderbar";
-    li.querySelector(".top").appendChild(b);
+    // Der Titel traegt KEIN contenteditable: der Text ist die Aussage des Reviews. Umstellbar ist
+    // nur das Label daneben.
+    const pill = prioPill(li, f.sev, SWITCHABLE);
+    pill.title = "Vorbelegt vom Review — umstellbar zwischen issue und nitpick; der Text bleibt unveraendert";
+    li.querySelector(".top").appendChild(pill);
     wire(li);
     return li;
   }
@@ -486,7 +575,7 @@
     titleEl.textContent = text;
     li._title = titleEl;
     titleEl.addEventListener("keydown", e => { if (e.key === "Escape") titleEl.blur(); });
-    li.querySelector(".top").insertBefore(prioPill(li, sev), li.querySelector(".del"));
+    li.querySelector(".top").insertBefore(prioPill(li, sev, SEVS), li.querySelector(".del"));
     li.querySelector(".del").addEventListener("click", e => { e.stopPropagation(); li.remove(); renumber(); sync(); });
     wire(li);
     return li;
@@ -494,7 +583,11 @@
 
   // Custom-Punkte fortlaufend nach den Findings nummerieren, lueckenlos.
   function renumber() {
-    let k = FINDINGS.length;
+    // The highest EXISTING number, not the count: a point pulled up into an open
+    // question or struck before rendering leaves a gap, and then length is lower
+    // than the top number - the first custom card would take a review point's
+    // number and the payload would name two different points under #N.
+    let k = FINDINGS.length ? Math.max(...FINDINGS.map(f => f.n)) : 0;
     allCards().forEach(c => { if (c._origin === "custom") { k++; c.dataset.n = k; c.querySelector(".id").textContent = k + " ·"; } });
   }
 
@@ -547,8 +640,11 @@
       (q.explain ? '<div class="qexplain"><span class="k">&rarr; heisst:</span> ' + esc(q.explain) + '</div>' : "") +
       '<div class="qopts"></div>';
     const opts = li.querySelector(".qopts");
-    if (q.a) opts.appendChild(optRow(name, "a", QOPT_LABEL.a, q.a, false));
-    if (q.b) opts.appendChild(optRow(name, "b", QOPT_LABEL.b, q.b, false));
+    // Verworfene Alternativen sind namenlos (keine SOTA-/Grosse-Kategorie mehr) - ein Zaehler
+    // haelt zwei gleichzeitig sichtbare "verworfen"-Zeilen unterscheidbar.
+    let rejected = 0;
+    if (q.a) opts.appendChild(optRow(name, "a", QOPT_LABEL.a + " " + ++rejected, q.a, false));
+    if (q.b) opts.appendChild(optRow(name, "b", QOPT_LABEL.b + " " + ++rejected, q.b, false));
     opts.appendChild(optRow(name, "c", QOPT_LABEL.c, q.c, true));   // c immer vorbelegt
 
     // Custom-Antwort-Zeile mit Inline-Textfeld.
@@ -557,7 +653,7 @@
     cl.innerHTML =
       '<input class="rad" type="radio" name="' + name + '" value="custom">' +
       '<span class="olabel">Eigene</span>' +
-      '<textarea class="cinput" rows="1" placeholder="Eigene Antwort statt a/b/c …" aria-label="Eigene Antwort zu F' + q.n + '"></textarea>';
+      '<textarea class="cinput" rows="1" placeholder="Eigene Antwort …" aria-label="Eigene Antwort zu F' + q.n + '"></textarea>';
     opts.appendChild(cl);
     li._cinput = cl.querySelector(".cinput");
 
@@ -587,6 +683,14 @@
     cntEl.textContent = posted.length;
     totEl.textContent = cs.length;
     cs.forEach(c => c.classList.toggle("struck", !c._box.checked));
+    // Kopfzeile: das Ergebnis NACH den Umstellungen, ueber die tatsaechlich geposteten Punkte -
+    // ein gestrichener Punkt blockt nichts mehr.
+    nBlockingEl.textContent = posted.filter(c => SEV_BLOCKING[c._sev]).length;
+    nNonBlockingEl.textContent = posted.filter(c => !SEV_BLOCKING[c._sev]).length;
+    const nits = cs.filter(c => c._sev === "nitpick");
+    [nitPostBtn, nitDropBtn].forEach(b => {
+      if (nits.length) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
+    });
     allBtn.setAttribute("aria-pressed", String(cs.length > 0 && posted.length === cs.length));
     noneBtn.setAttribute("aria-pressed", String(posted.length === 0));
     document.querySelectorAll(".sevtoggle").forEach(btn => {
@@ -599,6 +703,16 @@
   allBtn.addEventListener("click", () => { allCards().forEach(c => c._box.checked = true); sync(); });
   noneBtn.addEventListener("click", () => { allCards().forEach(c => c._box.checked = false); sync(); });
 
+  // Nit-Batch-Aktionen. Sie sind der Grund, warum ein Nit billig ist: einzeln durchzugehen waere
+  // derselbe Aufwand wie bei einem blockierenden Punkt.
+  function eachNit(fn) {
+    const nits = allCards().filter(c => c._sev === "nitpick");
+    if (!nits.length) return;
+    nits.forEach(fn); sync();
+  }
+  nitPostBtn.addEventListener("click", () => eachNit(c => c._box.checked = true));
+  nitDropBtn.addEventListener("click", () => eachNit(c => c._box.checked = false));
+
   document.querySelectorAll(".sevtoggle").forEach(btn => {
     btn.addEventListener("click", () => {
       const members = allCards().filter(c => matches(c, btn.dataset.key));
@@ -609,8 +723,15 @@
     });
   });
 
-  // Severity-Vorauswahl fuers neue Item (sticky).
-  newPrio.addEventListener("change", () => { newPrioWrap.className = "prio-wrap " + newPrio.value; });
+  // Label-Vorauswahl fuers neue Item (sticky). Optionen aus SEVS, damit sie mit der Karten-Pill
+  // nicht auseinanderlaufen.
+  SEVS.forEach((key, i) => {
+    const o = document.createElement("option");
+    o.value = key; o.textContent = SEV_LABEL[key];
+    if (!i) o.selected = true;
+    newPrio.appendChild(o);
+  });
+  newPrio.addEventListener("change", () => { newPrioWrap.className = "prio-wrap " + SEV_CLASS[newPrio.value]; });
 
   function grow() { composer.style.height = "auto"; composer.style.height = composer.scrollHeight + "px"; }
   composer.addEventListener("input", grow);
@@ -644,7 +765,7 @@
     } else {
       const lines = ["Freigabe posten:"];
       posted.forEach(c => {
-        const head = "  #" + c.dataset.n + " [" + SEV_LABEL[c._sev] + "]";
+        const head = "  #" + c.dataset.n + " " + SEV_LABEL[c._sev];
         if (c._origin !== "custom") { lines.push(head + " " + c._title.textContent.trim()); return; }
         // Custom-Punkt: Text (ggf. mehrzeiliges Markdown) verbatim erhalten, nicht flach machen.
         const txt = c._title.textContent.replace(/\s+$/, "");
@@ -652,6 +773,9 @@
         else { lines.push(head + " Custom: " + txt.trim()); }
       });
       if (struck.length) lines.push("Gestrichen: " + struck.map(c => "#" + c.dataset.n).join(", "));
+      // Die Bilanz mitgeben: der Maintainer hat sie im Widget gesehen, die Review-Session nicht.
+      lines.push("Bilanz: " + posted.filter(c => SEV_BLOCKING[c._sev]).length + " blockend, " +
+        posted.filter(c => !SEV_BLOCKING[c._sev]).length + " nicht blockend");
       out = lines.join("\n");
     }
     // Entscheidungen zu den offenen Fragen anhaengen (fuer beide Zweige oben).

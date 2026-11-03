@@ -1,0 +1,48 @@
+{
+  "rules": [
+    {
+      "id": "K1",
+      "statement": "**NEVER shorten, omit, move, or change on your own any order or instruction of the human maintainer — no exception, whatever the role; less scope, dropping, moving or replacing a part goes to them as a question first.**"
+    },
+    {
+      "id": "K2",
+      "statement": "Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread except the project's `CLAUDE.md` and its imports, which the harness injects again."
+    },
+    {
+      "id": "K3",
+      "statement": "Never invent: research first, ask when it stays unclear, and say \"unknown\" when nothing resolves it."
+    },
+    {
+      "id": "K4",
+      "statement": "An agent never writes under the human owner's account."
+    },
+    {
+      "id": "K5",
+      "statement": "End a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer; for a process, the orchestrator's journaled grant counts as that yes (`.agents/rules/agents.md`)."
+    },
+    {
+      "id": "K6",
+      "statement": "No merge without a test run that covers the merge head, in the mode `.agents/rules/pr.md` § \"Test Runs\" asks for."
+    },
+    {
+      "id": "K7",
+      "statement": "Everything buildable is built; only what is not buildable goes to a valid carrier."
+    },
+    {
+      "id": "K8",
+      "statement": "Every read that decides something is receipted: the start receipt and each point-of-use receipt."
+    },
+    {
+      "id": "K9",
+      "statement": "No release, publish or force-push to a branch other than your own without approval."
+    },
+    {
+      "id": "K10",
+      "statement": "Never disable tests to make a build pass, and never log secrets or tokens."
+    },
+    {
+      "id": "K11",
+      "statement": "Nothing lives only locally, in a chat or in a message: every result, decision and open point stands at its carrier in the repo or an issue — written down per decided topic, before a compaction and at the session's end, not per question and answer."
+    }
+  ]
+}
